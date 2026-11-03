@@ -24,3 +24,8 @@ Forbidden (stop and write it in the pull request instead):
 
 Before writing "blocked", "missing" or "done", run the command that proves it and paste it next
 to the claim.
+
+If you cannot reach an external site (official docs, package index), say so with the command and
+its error, use what the work order gives you, and keep going. A criterion that passes with an
+empty or trivial test does not count: each `-k` criterion means a real test that would fail if
+the behavior broke.

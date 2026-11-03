@@ -4,9 +4,16 @@ version = "0.1.0"
 description = "An AI agent that can ask to move money through PayPal, but can only do it with a single-use mandate the owner approved once."
 requires-python = ">=3.11"
 license = "Apache-2.0"
+# Every piece's dependencies are declared here up front so the three parallel branches never
+# conflict on this file. Add one only through docs/CONTRACT_CHANGES.md.
 dependencies = [
   "cryptography>=42",
   "rfc8785>=0.1.2",
+  "httpx>=0.27",          # N1 PayPal adapter, N3 test client
+  "anthropic>=0.40",      # N2 agent
+  "fastapi>=0.115",       # N3 demo
+  "uvicorn>=0.30",        # N3 demo
+  "jinja2>=3.1",          # N3 demo templates
 ]
 
 [project.optional-dependencies]
@@ -15,3 +22,7 @@ dev = ["pytest>=8"]
 [tool.pytest.ini_options]
 pythonpath = ["src", "libs/ask-first-mandate/src"]
 testpaths = ["tests", "libs/ask-first-mandate/tests"]
+addopts = "--strict-markers -m 'not live'"
+markers = [
+  "live: talks to the real PayPal sandbox; needs PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET",
+]

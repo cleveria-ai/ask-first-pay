@@ -2,6 +2,21 @@
 
 Every piece (PayPal adapter, agent, demo app) codes against these types, never against another
 piece's internals. Change this file only through docs/CONTRACT.md.
+
+Money model (PayPal Orders v2 with intent AUTHORIZE):
+  book      -> create_order, payer approves, authorize      (money held, nothing moved)
+  no-show   -> capture (within the 3-day honor period, or reauthorize first; the authorization
+               expires after 29 days)
+  cancel    -> void (nothing was captured, so there is nothing to refund)
+  goodwill  -> refund, only on a COMPLETED / PARTIALLY_REFUNDED capture
+
+Amounts are major units as float at this boundary because the mandate engine caps with floats;
+adapters must send PayPal a string with exactly two decimals (USD) and must reject amounts with
+more than two decimals instead of rounding them.
+
+`request_id` is the idempotency key. The gate passes the mandate's `jti`, so a retry of the same
+mandate can never move money twice, and two different mandates for equal amounts are never
+confused. Adapters send it as the `PayPal-Request-Id` header.
 """
 from __future__ import annotations
 
@@ -12,11 +27,11 @@ from typing import Protocol
 @dataclass(frozen=True)
 class Order:
     order_id: str
-    amount: float          # major units, e.g. 10.00
+    amount: float
     currency: str          # ISO 4217, e.g. "USD"
     reference: str         # our booking id; PayPal's purchase_units[0].reference_id
-    approve_url: str       # where the payer approves the deposit (sandbox checkout)
-    status: str            # CREATED | APPROVED | AUTHORIZED | COMPLETED | VOIDED
+    approve_url: str       # the payer link: rel "payer-action" or "approve" in PayPal's links
+    status: str            # CREATED | SAVED | APPROVED | PAYER_ACTION_REQUIRED | COMPLETED | VOIDED
 
 
 @dataclass(frozen=True)
@@ -25,7 +40,7 @@ class Authorization:
     order_id: str
     amount: float
     currency: str
-    status: str            # CREATED | CAPTURED | VOIDED | EXPIRED
+    status: str            # CREATED | CAPTURED | PARTIALLY_CAPTURED | VOIDED | EXPIRED | DENIED | PENDING
 
 
 @dataclass(frozen=True)
@@ -34,7 +49,7 @@ class Capture:
     authorization_id: str
     amount: float
     currency: str
-    status: str            # COMPLETED | PENDING | DECLINED
+    status: str            # COMPLETED | PENDING | DECLINED | FAILED | REFUNDED | PARTIALLY_REFUNDED
 
 
 @dataclass(frozen=True)
@@ -43,13 +58,14 @@ class Refund:
     capture_id: str
     amount: float
     currency: str
-    status: str            # COMPLETED | PENDING | CANCELLED
+    status: str            # COMPLETED | PENDING | FAILED | CANCELLED
 
 
 @dataclass
 class ProviderError(Exception):
-    code: str              # provider error name, e.g. "AUTHORIZATION_EXPIRED"
+    code: str              # PayPal error name, e.g. "AUTHORIZATION_EXPIRED"
     message: str = ""
+    transient: bool = False   # True for timeouts and 5xx: the money may or may not have moved
     details: dict = field(default_factory=dict)
 
     def __str__(self) -> str:
@@ -57,15 +73,18 @@ class ProviderError(Exception):
 
 
 class PaymentProvider(Protocol):
-    """A deposit is created and authorized when the customer books; money moves only on
-    capture or refund, and those two are reachable only through the mandate gate (gate.py)."""
+    """Money moves only on capture, refund and void, and those are reachable only through the
+    mandate gate (gate.py). Everything else holds or describes money."""
 
     def create_order(self, amount: float, currency: str, reference: str) -> Order: ...
 
     def authorize(self, order_id: str) -> Authorization: ...
 
-    def capture(self, authorization_id: str, amount: float) -> Capture: ...
+    def reauthorize(self, authorization_id: str, request_id: str) -> Authorization: ...
 
-    def refund(self, capture_id: str, amount: float) -> Refund: ...
+    def capture(self, authorization_id: str, amount: float, request_id: str,
+                final_capture: bool = True) -> Capture: ...
 
-    def void(self, authorization_id: str) -> Authorization: ...
+    def refund(self, capture_id: str, amount: float, request_id: str) -> Refund: ...
+
+    def void(self, authorization_id: str, request_id: str) -> Authorization: ...

@@ -6,3 +6,4 @@ data/
 .env
 *.jsonl
 node_modules/
+docs/rules/
