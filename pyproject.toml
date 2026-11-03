@@ -1,0 +1,17 @@
+[project]
+name = "ask-first-pay"
+version = "0.1.0"
+description = "An AI agent that can ask to move money through PayPal, but can only do it with a single-use mandate the owner approved once."
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = [
+  "cryptography>=42",
+  "rfc8785>=0.1.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "libs/ask-first-mandate/src"]
+testpaths = ["tests", "libs/ask-first-mandate/tests"]
