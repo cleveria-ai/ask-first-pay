@@ -104,17 +104,22 @@ def test_agent_goodwill_capture_then_refund_each_own_mandate_over_cap_rejected(w
     assert len(w.provider.refunds) == 1
 
 
-def test_agent_refund_beyond_capture_is_rejected_by_provider(w):
+def test_agent_refund_beyond_capture_is_refused_before_the_owner_and_by_the_provider(w):
     w.book_and_hold()
     w.say("c", [[tool("request_capture", "d", booking_id="booking-1", amount=3.0)], [text("ok")]])
     (cap_m,) = w.state.mandates
     w.approve(cap_m)
     w.say("go", [[tool("execute_mandate", "e", mandate_id=cap_m)], [text("ok")]])
+    # the agent cannot even put "refund 8.00" in front of the owner when only 3.00 was captured
     w.say("refund 8", [[tool("request_refund", "f", booking_id="booking-1", amount=8.0)], [text("ok")]])
-    ref_m = [m for m in w.state.mandates if m != cap_m][0]
-    w.approve(ref_m)
-    w.say("go", [[tool("execute_mandate", "g", mandate_id=ref_m)], [text("ok")]])
-    assert "executor_failed" in w.tool_results()[-1] and not w.provider.refunds
+    assert "still captured" in w.tool_results()[-1] and list(w.state.mandates) == [cap_m]
+    # and if such a mandate existed anyway (asked outside the agent), PayPal's rule still holds
+    over = w.gate.request("refund_deposit", w.state.bookings["booking-1"]["capture_id"], 8.0)
+    w.approve(over["jti"])
+    from ask_first import MandateRejected
+    with pytest.raises(MandateRejected) as e:
+        w.gate.execute(over["jti"], "refund_deposit", w.state.bookings["booking-1"]["capture_id"], 8.0)
+    assert e.value.reason == "executor_failed" and not w.provider.refunds
 
 
 def test_agent_injection_cannot_move_money(w):

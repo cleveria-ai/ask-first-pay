@@ -29,6 +29,8 @@ TOOLS = [
             {"booking_id": _S}, ["booking_id"]),
     _schema("confirm_deposit", "After the customer approved the order, authorize it (hold the deposit).",
             {"booking_id": _S}, ["booking_id"]),
+    _schema("refresh_hold", "Before asking to capture an old hold: PayPal guarantees an authorization for 3 days (honor period). After that, reauthorize it once to get a fresh hold on the same deposit. Holds money, never moves it.",
+            {"booking_id": _S}, ["booking_id"]),
     _schema("list_bookings", "List bookings and their deposit state."),
     _schema("ledger_status", "Show the tamper-evident ledger of every money attempt."),
     _schema("request_capture", "No-show: ASK the owner for permission to capture the held deposit. Does not move money.",
@@ -68,7 +70,7 @@ class Toolbox:
         bid = f"booking-{len(self.s.bookings) + 1}"
         self.s.bookings[bid] = {"id": bid, "customer": customer, "slot": slot, "status": "booked",
                                 "deposit": DEPOSIT, "order_id": None, "authorization_id": None,
-                                "capture_id": None, "captured": 0.0}
+                                "capture_id": None, "captured": 0.0, "refunded": 0.0}
         return {"booking_id": bid, "slot": slot, "deposit": DEPOSIT}
 
     def t_create_deposit_order(self, booking_id: str) -> dict:
@@ -84,6 +86,23 @@ class Toolbox:
         a = self.desk.authorize(b["order_id"])
         b["authorization_id"], b["status"] = a.authorization_id, "deposit_held"
         return {"authorization_id": a.authorization_id, "status": a.status}
+
+    def t_refresh_hold(self, booking_id: str) -> dict:
+        """Reauthorize after the honor period. Inside it, PayPal refuses (too soon): the current
+        hold is still good, so that is reported as 'not needed', not as a failure."""
+        b = self.s.bookings[booking_id]
+        if not b["authorization_id"] or b["status"] != "deposit_held":
+            return {"error": "no held deposit for this booking"}
+        old = b["authorization_id"]
+        try:
+            a = self.desk.reauthorize(old, f"reauth-{old}")       # idempotent: one reauthorization per hold
+        except ProviderError as e:
+            if e.transient:
+                raise
+            return {"refreshed": False, "authorization_id": old,
+                    "reason": f"{e.code}: the current hold is still valid, capture it as is"}
+        b["authorization_id"] = a.authorization_id
+        return {"refreshed": True, "authorization_id": a.authorization_id, "replaces": old, "status": a.status}
 
     def t_list_bookings(self) -> dict:
         return {"bookings": list(self.s.bookings.values()), "slots": SLOTS}
@@ -105,8 +124,11 @@ class Toolbox:
 
     def t_request_capture(self, booking_id: str, amount: float) -> dict:
         b = self.s.bookings[booking_id]
-        if not b["authorization_id"]:
+        if not b["authorization_id"] or b["status"] != "deposit_held":
             return {"error": "no held deposit for this booking"}
+        if not 0 < float(amount) <= b["deposit"]:
+            # Never put a bigger number in front of the owner than the hold itself.
+            return {"error": f"can only ask to capture between 0.01 and the held {b['deposit']:.2f}"}
         return self._ask("capture_deposit", b["authorization_id"], float(amount), booking_id)
 
     def t_request_void(self, booking_id: str) -> dict:
@@ -119,6 +141,9 @@ class Toolbox:
         b = self.s.bookings[booking_id]
         if not b["capture_id"]:
             return {"error": "nothing captured for this booking yet"}
+        left = round(b["captured"] - b.get("refunded", 0.0), 2)
+        if not 0 < float(amount) <= left:
+            return {"error": f"can only ask to refund between 0.01 and the {left:.2f} still captured"}
         return self._ask("refund_deposit", b["capture_id"], float(amount), booking_id)
 
     def t_execute_mandate(self, mandate_id: str) -> dict:
@@ -133,5 +158,6 @@ class Toolbox:
         elif req["action"] == "void_deposit":
             b["status"] = "cancelled"
         elif req["action"] == "refund_deposit":
-            b["status"] = "partly_refunded"
+            b["refunded"] = round(b.get("refunded", 0.0) + req["amount"], 2)
+            b["status"] = "refunded" if b["refunded"] >= b["captured"] else "partly_refunded"
         return {"result": out["result"], "outcome": outcome}

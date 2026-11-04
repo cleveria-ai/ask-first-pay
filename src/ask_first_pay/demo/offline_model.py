@@ -86,8 +86,9 @@ class OfflineFrontDeskModel(ScriptedModel):
         if DECLINED_RE.search(msg):
             return [text("The owner declined, so the deposit stays held and nothing moved.")]
         if m := NO_SHOW_RE.search(msg):
-            b = self.state.bookings.get(m.group(1))
-            return [tool("request_capture", "q", booking_id=m.group(1), amount=b["deposit"] if b else 0)]
+            # An old hold is refreshed first (reauthorize after the 3-day honor period), then the
+            # capture is asked for on whatever authorization is current.
+            return [tool("refresh_hold", "h", booking_id=m.group(1))]
         if m := GOODWILL_RE.search(msg):
             return [tool("request_refund", "r", booking_id=m.group(2), amount=float(m.group(1)))]
         if re.search(r"\b(i\s+(have\s+)?(paid|approved)|payment (is )?done)\b", low):
@@ -135,6 +136,9 @@ class OfflineFrontDeskModel(ScriptedModel):
             b = self.state.bookings[args["booking_id"]]
             return [text(f"Confirmed: {slot_label(b['slot'])}. ${b['deposit']:.2f} is held "
                          f"(authorization {res['authorization_id']}), not charged.")]
+        if name == "refresh_hold":
+            b = self.state.bookings[args["booking_id"]]
+            return [tool("request_capture", "q", booking_id=b["id"], amount=b["deposit"])]
         if name == "list_bookings":
             bs = res["bookings"]
             if not bs:
