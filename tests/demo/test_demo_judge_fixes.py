@@ -82,3 +82,10 @@ def test_no_show_end_to_end_five_days_later_reauthorizes_and_captures(tmp_path):
     assert r.status_code == 200
     assert [c[0] for c in provider.calls if c[0] in ("capture", "void", "refund")] == ["capture"]
     assert "captured for the no-show" in client.get("/chat").text
+
+
+def test_pages_owner_reads_a_plain_headline_from_signed_fields_and_no_pairing_form_once_paired(demo):
+    demo.client.post("/scenario/no_show")
+    text = demo.client.get("/owner").text
+    assert "Keep up to $10.00 of the held deposit (no-show)" in text
+    assert 'id="pair-form"' not in text                     # the demo fixture already paired

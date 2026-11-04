@@ -28,6 +28,11 @@ from .front import BUSINESS, GOODWILL_REFUND, SLOT_LABELS, AgentFrontDesk
 
 HERE = Path(__file__).parent
 PAIRING_TTL_S = 3600
+# The owner's headline is chosen by the SIGNED action and filled with the SIGNED cap: plain words,
+# still nothing the model wrote.
+HEADLINES = {"capture_deposit": "Keep up to ${cap} of the held deposit (no-show)",
+             "void_deposit": "Release the held deposit; nothing is charged (cancellation)",
+             "refund_deposit": "Give back up to ${cap} of the captured deposit (goodwill)"}
 
 
 class DemoState:
@@ -111,6 +116,7 @@ class DemoState:
                 continue
             state = "declined" if jti in self.declined and m["_state"] == "pending" else m["_state"]
             rows.append({"id": jti, "short": jti[:8], "state": state, "action": m["action"],
+                         "headline": HEADLINES.get(m["action"], m["action"]).format(cap=f"{m['cap']:.2f}"),
                          "resource": m["recipient"], "cap": f"{m['cap']:.2f}", "exp": m["exp"],
                          "exp_text": time.strftime("%H:%M:%S UTC", time.gmtime(m["exp"])),
                          "description": self.agent.describe(jti),

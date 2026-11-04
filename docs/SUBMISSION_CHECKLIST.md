@@ -13,7 +13,7 @@ hackathon-specific questions and answer them from `docs/DEVPOST.md`.
 | Full suite green on `main` | `.venv/bin/python -m pytest -q` | OWNER (re-run after merge) |
 | Optional: one run against the PayPal sandbox with your own sandbox app | `pytest -m live` and the demo with `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET` exported (never committed) | OWNER |
 | Optional: one run with Claude | export `ANTHROPIC_API_KEY`, `scripts/demo.sh` | OWNER |
-| Record the video from `docs/VIDEO_SCRIPT.md` (under 3:00; script totals 2:30) | — | OWNER |
+| Record the video from `docs/VIDEO_SCRIPT.md` (under 3:00; script totals 2:40) | — | OWNER |
 | Upload the video (YouTube, Vimeo or Youku, public or unlisted as the rules allow) | URL | OWNER |
 | Make the repository public (after checking `git log` has no secrets: `git grep -nE "sk-ant-\|PAYPAL_CLIENT_SECRET\s*="`) | https://github.com/cleveria-ai/ask-first-pay | OWNER |
 | Remove "Work in progress, private until submission." from `README.md` | — | OWNER |

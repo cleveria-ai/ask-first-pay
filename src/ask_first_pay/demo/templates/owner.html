@@ -6,6 +6,7 @@
   {% if paired %}A phone is paired (key {{ paired[:12] }}…).{% else %}No phone is paired yet.{% endif %}
 </p>
 
+{% if not paired %}
 <section aria-labelledby="pair-h" id="pair-section">
   <h2 id="pair-h">Pair this phone</h2>
   <p>Enter the one-time code printed in the terminal. This browser creates an Ed25519 key that never leaves it.</p>
@@ -16,13 +17,15 @@
   </form>
   <p id="pair-msg" role="status"></p>
 </section>
+{% endif %}
 
 <section aria-labelledby="pending-h">
   <h2 id="pending-h">Waiting for you ({{ pending|length }})</h2>
   <ul class="pending-list" id="pending-list">
   {% for r in pending %}
     <li class="card mandate" data-id="{{ r.id }}" data-canonical="{{ r.canonical }}">
-      <p class="what"><strong>{{ r.action }}</strong> on <code>{{ r.resource }}</code></p>
+      <p class="headline"><strong>{{ r.headline }}</strong></p>
+      <p class="what"><code>{{ r.action }}</code> on <code>{{ r.resource }}</code></p>
       <dl>
         <dt>PayPal resource</dt><dd>{{ r.resource }}</dd>
         <dt>At most</dt><dd>USD {{ r.cap }}</dd>

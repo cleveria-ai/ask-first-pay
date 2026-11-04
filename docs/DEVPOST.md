@@ -10,13 +10,19 @@ refund or void on its own is one prompt injection away from refunding everyone. 
 agent to do all the routine work and still leave the decision about money with the owner, in a
 way that can be proven afterwards rather than trusted.
 
+It is built for the owner of a small appointment business who runs the front desk from their
+phone: they want deposits to stop no-shows, and they want an assistant that handles bookings at
+any hour, but they are the only one who decides when a customer's money is actually taken.
+
 ## What it does
 
 - A customer books over chat (WhatsApp-style, simulated in the demo). The agent creates a PayPal
   order with intent **AUTHORIZE** and, after the customer approves it, authorizes it: the 10.00
   deposit is **held, not charged**.
 - When money has to move, the agent can only **ask**:
-  - **No-show:** it requests a `capture_deposit` mandate for that authorization and amount.
+  - **No-show:** it requests a `capture_deposit` mandate for that authorization and amount. If
+    the visit is more than three days after the booking (past PayPal's honor period), it first
+    reauthorizes the hold, so the owner signs for the live authorization.
   - **Cancellation:** it requests a `void_deposit` mandate; the hold is released and nothing is
     charged or refunded.
   - **Goodwill:** after a capture, it requests a `refund_deposit` mandate for part of it.
@@ -35,18 +41,21 @@ way that can be proven afterwards rather than trusted.
   `/v2/payments/captures/{id}/refund`, plus GETs), and OAuth 2.0 client credentials
   (`/v1/oauth2/token`). Written against the **sandbox** with `httpx`; production is refused unless
   explicitly enabled. Every write sends `PayPal-Request-Id`, amounts go as two-decimal strings,
-  timeouts and 5xx become retryable errors that keep the same request id.
+  timeouts and 5xx become transient errors, and the gate retries them with the same request id,
+  so a capture that timed out after PayPal took the money is answered, not repeated.
 - **AI:** Anthropic **Claude** (Messages API with tool use) drives the agent when an API key is
-  set. Nine tools: five free (book, create the deposit order, confirm the hold, list bookings,
-  read the ledger) and four gated (request capture, request void, request refund, execute an
+  set. Ten tools: six free (book, create the deposit order, confirm the hold, refresh an old hold
+  by reauthorizing it, list bookings, read the ledger) and four gated (request capture, request void, request refund, execute an
   approved mandate). Without a key, an offline scripted model drives the same loop and tools, so
   anyone can run the demo.
 - **Mandate engine:** our Apache-2.0 library `ask-first-mandate` (single-use, scoped, capped,
   expiring mandates signed with Ed25519; RFC 8785 canonical JSON; hash-chained JSON-lines ledger).
 - **The gate:** the agent receives two narrow handles: `AgentGate` (request, execute, describe,
   view ledger) and `HoldDesk` (create order, authorize, reauthorize). It never receives the
-  engine, the PayPal client or the owner's side, so there is no code path from the model to
-  capture, void or refund except through an approved mandate.
+  engine, the PayPal client or the owner's side, so none of the model's tools reaches capture,
+  void or refund except through an approved mandate. The gated tools also refuse to ask for more
+  than is held (capture) or still captured (refund), so the owner is never shown an inflated
+  number to approve.
 - **Demo:** FastAPI + Jinja pages (chat, owner phone, ledger), WebCrypto for the owner's key,
   AG Grid Community for the ledger table, no CDN.
 - A fake PayPal provider follows the same rules (3-day honor period, 29-day expiry, idempotent
@@ -68,13 +77,15 @@ way that can be proven afterwards rather than trusted.
 
 ## Accomplishments that we're proud of
 
-- The agent provably cannot move money on its own: the tests use a spy provider and an injected
-  "owner approved" message and assert that nothing moved.
+- The agent cannot move money on its own through any tool it holds: the tests use a spy provider
+  and an injected "owner approved" message and assert that nothing moved. A decline is final and
+  a second approval is refused.
 - Replays and forged approvals are rejected in plain sight on the ledger page, with an intact
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
   PayPal sandbox by setting environment variables.
-- 103 automated tests, all offline.
+- TESTCOUNT automated tests, all offline, including the attacks listed under "Try to break it"
+  in the README.
 
 ## What we learned
 
@@ -91,7 +102,7 @@ way that can be proven afterwards rather than trusted.
 - A real WhatsApp Business channel instead of the simulated chat.
 - PayPal webhooks (order approved, authorization voided or expired) instead of the customer
   saying "I paid".
-- Automatic reauthorization reminders before the honor period ends, still behind a mandate.
+- A daily sweep that reauthorizes holds before the 29-day expiry, and reminders to the owner.
 - Per-owner policies (for example "approve no-show captures under 20.00 automatically") expressed
   as standing mandates with their own cap and expiry.
 
