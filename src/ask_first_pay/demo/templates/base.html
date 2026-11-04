@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Ask First Pay{% endblock %} · Ask First Pay demo</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <a class="brand" href="/">Ask First Pay <span>demo</span></a>
+  <nav aria-label="Pages">
+    <a href="/chat" {% if nav == 'chat' %}aria-current="page"{% endif %}>Chat</a>
+    <a href="/owner" {% if nav == 'owner' %}aria-current="page"{% endif %}>Owner</a>
+    <a href="/ledger" {% if nav == 'ledger' %}aria-current="page"{% endif %}>Ledger</a>
+  </nav>
+</header>
+<main id="main">
+{% block main %}{% endblock %}
+</main>
+<footer class="foot">Fictional business. {% if simulated %}Payments are simulated (FakeProvider).{% else %}PayPal sandbox.{% endif %}
+ Money moves only through the mandate gate.</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>
