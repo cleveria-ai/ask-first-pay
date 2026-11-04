@@ -47,7 +47,7 @@ decision in `docs/agent_toolkit_decision.md`. If you use it, it may only back th
 | id | says | command |
 |---|---|---|
 | K1 | the whole suite is green | `.venv/bin/python -m pytest -q` |
-| K2 | at least 6 agent tests, all passing offline without any key | `test $(env -u ANTHROPIC_API_KEY .venv/bin/python -m pytest -q tests/agent --collect-only -q \| grep -c '::') -ge 6 && env -u ANTHROPIC_API_KEY .venv/bin/python -m pytest -q tests/agent` |
+| K2 | at least 6 agent tests, all passing offline without any key | `test $(env -u ANTHROPIC_API_KEY .venv/bin/python -m pytest tests/agent --collect-only -q \| grep -c '::') -ge 6 && env -u ANTHROPIC_API_KEY .venv/bin/python -m pytest -q tests/agent` |
 | K3 | the agent code has no path to approval or to moving money | `test -d src/ask_first_pay/agent && ! grep -rnE "\.(capture\|refund\|void\|approve\|pair)\(\|new_pairing_code\|person_pub\|OwnerSide\|make_engine\|MandateEngine\|FakeProvider" src/ask_first_pay/agent` |
 | K4 | the injection test passes and asserts the spy saw no money movement | `.venv/bin/python -m pytest -q tests/agent -k injection` |
 | K5 | the cancellation test passes and uses void | `.venv/bin/python -m pytest -q tests/agent -k cancel` |

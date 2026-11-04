@@ -44,7 +44,7 @@ mock transport and asserts the same sequence of statuses.
 |---|---|---|
 | K1 | the whole suite is green | `.venv/bin/python -m pytest -q` |
 | K2 | the adapter implements every port method | `.venv/bin/python -c "from ask_first_pay.paypal import PayPalProvider as P; assert all(callable(getattr(P, m, None)) for m in ('create_order','authorize','reauthorize','capture','refund','void'))"` |
-| K3 | at least 8 offline adapter tests, all passing | `test $(.venv/bin/python -m pytest -q tests/paypal --collect-only -q \| grep -c '::') -ge 8 && .venv/bin/python -m pytest -q tests/paypal` |
+| K3 | at least 8 offline adapter tests, all passing | `test $(.venv/bin/python -m pytest tests/paypal --collect-only -q \| grep -c '::') -ge 8 && .venv/bin/python -m pytest -q tests/paypal` |
 | K4 | a test inspects the sent request and asserts PayPal-Request-Id equals the request_id on capture, refund and void | `.venv/bin/python -m pytest -q tests/paypal -k request_id` |
 | K5 | a test proves production without the explicit flag raises | `.venv/bin/python -m pytest -q tests/paypal -k production` |
 | K6 | a test proves amounts go as two-decimal strings and three decimals are rejected | `.venv/bin/python -m pytest -q tests/paypal -k amount` |
