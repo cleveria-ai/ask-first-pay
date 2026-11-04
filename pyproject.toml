@@ -26,3 +26,11 @@ addopts = "--strict-markers -m 'not live'"
 markers = [
   "live: talks to the real PayPal sandbox; needs PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET",
 ]
+
+# `pip install -e .` installs both packages: the app and the mandate engine it is built on.
+[tool.setuptools]
+package-dir = {"" = "src", "ask_first" = "libs/ask-first-mandate/src/ask_first"}
+packages = ["ask_first_pay", "ask_first_pay.agent", "ask_first_pay.demo", "ask_first_pay.paypal", "ask_first"]
+
+[tool.setuptools.package-data]
+"ask_first_pay.demo" = ["templates/*.html", "static/*.js", "static/*.css", "static/vendor/*"]
