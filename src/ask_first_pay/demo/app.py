@@ -45,6 +45,7 @@ class DemoState:
         self.front = AgentFrontDesk(self.agent, self.desk, self.checkout_url, model_factory)
         self.paired_key: str | None = None
         self.declined: set[str] = set()
+        self.scenario_used: set[str] = set()   # held bookings a scenario already acted on
         self.lock = threading.RLock()
 
     def checkout_url(self, order_id: str) -> str:
@@ -58,6 +59,11 @@ class DemoState:
     # ---- scenarios (each one is self-contained with the fake provider)
     def _booking_for_scenario(self):
         """(conversation, booking) with a held deposit, made through the agent like a customer would."""
+        held = self.front.latest("deposit_held")
+        if (held is not None and held[1]["id"] not in self.scenario_used
+                and not any(m["booking_id"] == held[1]["id"] for m in held[0].mandates.values())):
+            self.scenario_used.add(held[1]["id"])      # the booking the customer just made in the chat
+            return held
         if self.simulated:
             slot = self.front.free_slot()
             if slot is None:                          # every slot taken: a new customer conversation
@@ -70,6 +76,7 @@ class DemoState:
             s, b = found
             self.provider.approve(b["order_id"])      # the payer approves on the checkout page
             self.front.on_payer_approved(b["order_id"])
+            self.scenario_used.add(b["id"])
             return found if b["status"] == "deposit_held" else None
         found = self.front.latest("deposit_held")
         if found is None:
@@ -111,7 +118,14 @@ class DemoState:
         return rows
 
     def approve(self, mandate_id: str, signature: str) -> None:
+        """Only a mandate still waiting can be approved: a decline is final, and approving twice
+        is refused instead of silently answering ok."""
         with self.lock:
+            m = self.owner.get(mandate_id)
+            if m is not None and mandate_id in self.declined:
+                raise MandateRejected("declined", f"{mandate_id} was declined by the owner; declines are final")
+            if m is not None and m["_state"] != "pending":
+                raise MandateRejected("already_approved", f"{mandate_id} is already {m['_state']}")
             self.owner.approve(mandate_id, signature)
             self.front.on_approved(mandate_id)
 
@@ -130,11 +144,16 @@ class DemoState:
         for e in reversed(led["entries"]):
             if "_unreadable" in e:
                 continue
+            # A rejected row records only the reason; show what that mandate was for (its signed
+            # fields), so "rejected · replay" reads as "a second capture of AUTH-… was refused".
+            m = self.owner.get(str(e.get("mandate_id", ""))) or {}
+            amount = e["amount"] if "amount" in e else m.get("cap")
             rows.append({"n": e.get("n"), "time": time.strftime("%H:%M:%S", time.gmtime(e.get("ts", 0))),
                          "result": e.get("result"), "reason": e.get("reason") or "",
-                         "mandate": str(e.get("mandate_id", ""))[:8], "action": e.get("action", ""),
-                         "resource": e.get("recipient", ""),
-                         "amount": f"{e['amount']:.2f}" if "amount" in e else "",
+                         "mandate": str(e.get("mandate_id", ""))[:8],
+                         "action": e.get("action") or m.get("action", ""),
+                         "resource": e.get("recipient") or m.get("recipient", ""),
+                         "amount": f"{amount:.2f}" if amount is not None else "",
                          "hash": e.get("hash", "")})
         v = dict(led["verification"])
         v["empty"] = not led["entries"]
@@ -150,6 +169,14 @@ def default_provider():
         except Exception as e:                          # noqa: BLE001
             print(f"[demo] PayPalProvider unavailable ({e!r}); using FakeProvider")
     return FakeProvider()
+
+
+async def _json(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
 
 
 def create_app(provider=None, ledger_path: str | None = None, model_factory=None) -> FastAPI:
@@ -228,7 +255,7 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
 
     @app.post("/owner/pair")
     async def owner_pair(request: Request):
-        body = await request.json()
+        body = await _json(request)
         try:
             with state.lock:
                 state.paired_key = state.owner.pair(str(body.get("code", "")).strip(),
@@ -239,7 +266,7 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
 
     @app.post("/owner/approve")
     async def owner_approve(request: Request):
-        body = await request.json()
+        body = await _json(request)
         try:
             state.approve(str(body.get("mandate_id", "")), str(body.get("signature", "")))
         except MandateRejected as e:
@@ -248,7 +275,7 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
 
     @app.post("/owner/decline")
     async def owner_decline(request: Request):
-        body = await request.json()
+        body = await _json(request)
         ok = state.decline(str(body.get("mandate_id", "")))
         return JSONResponse({"ok": ok}, status_code=200 if ok else 400)
 
