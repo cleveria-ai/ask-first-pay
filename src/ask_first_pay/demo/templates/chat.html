@@ -14,9 +14,10 @@
 <form class="composer" method="post" action="/chat/send">
   <label for="message">Message</label>
   <input id="message" name="message" type="text" maxlength="500" autocomplete="off"
-         placeholder="book Tue 10:00" required>
+         placeholder="book {{ slots[0] }}" required>
   <button class="btn" type="submit">Send</button>
 </form>
+<p class="hint">Agent model: {{ model_name }}.</p>
 <p class="hint">Quick: {% for s in slots %}<code>book {{ s }}</code>{% if not loop.last %} · {% endif %}{% endfor %} · <code>cancel</code></p>
 <h2>Scenarios</h2>
 <div class="stack">

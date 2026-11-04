@@ -42,12 +42,12 @@ def test_pages_have_no_cdn_and_serve_vendored_grid(demo):
 
 
 def test_pages_chat_books_and_confirms_after_the_fake_checkout(demo):
-    r = demo.client.post("/chat/send", data={"message": "book Tue 10:00"})
+    r = demo.client.post("/chat/send", data={"message": "book Tue 15:00"})
     assert r.status_code == 303
     assert "/checkout/ORDER-0001" in demo.client.get("/chat").text
     assert demo.client.get("/checkout/ORDER-0001").status_code == 200
     demo.client.post("/checkout/ORDER-0001/approve")
-    assert "Confirmed: Tue 10:00" in demo.client.get("/chat").text
+    assert "Confirmed: Tue 17 Nov 15:00" in demo.client.get("/chat").text
     assert demo.calls("capture") == [] and demo.calls("void") == []   # the booking only holds money
 
 

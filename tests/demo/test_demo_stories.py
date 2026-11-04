@@ -35,7 +35,7 @@ def test_cancel_voids_and_never_refunds(demo):
 
 
 def test_cancel_through_the_chat_asks_the_owner_to_void(demo):
-    demo.client.post("/chat/send", data={"message": "book Wed 09:00"})
+    demo.client.post("/chat/send", data={"message": "book Wed 10:00"})
     demo.client.post("/checkout/ORDER-0001/approve")
     demo.client.post("/chat/send", data={"message": "please cancel"})
     (jti,) = demo.pending_ids()

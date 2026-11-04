@@ -15,6 +15,10 @@ def main() -> None:
     print(f"  customer chat   http://{host}:{port}/chat")
     print(f"  owner phone     http://{host}:{port}/owner")
     print(f"  ledger          http://{host}:{port}/ledger")
+    print(f"\n  agent model     {app.state.demo.front.model_name}"
+          f"{'' if app.state.demo.front.model_name == 'Claude' else ' (set ANTHROPIC_API_KEY for Claude)'}")
+    print(f"  payments        {type(app.state.demo.provider).__name__}"
+          f"{' (PayPal sandbox)' if not app.state.demo.simulated else ' (offline; set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET for the sandbox)'}")
     print(f"\n  Owner pairing code (single use, shown only here): {code}\n")
     uvicorn.run(app, host=host, port=port, log_level="warning")
 

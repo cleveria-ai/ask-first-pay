@@ -1,6 +1,7 @@
 """Ask First Pay demo: customer chat, owner phone page, ledger page, scenario buttons.
 
-Money moves only through `ask_first_pay.gate`. The chat stub gets an `AgentGate` and a `HoldDesk`;
+Money moves only through `ask_first_pay.gate`. The chat goes to the real agent
+(`ask_first_pay.agent.run_turn`, see `front.py`), which gets an `AgentGate` and a `HoldDesk`;
 the owner page gets `OwnerSide`. Nothing in this package calls the provider's money methods.
 """
 from __future__ import annotations
@@ -21,15 +22,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..fake_provider import FakeProvider
+from ..agent.tools import SLOTS
 from ..gate import AgentGate, HoldDesk, OwnerSide, make_engine
-from .stub import BUSINESS, GOODWILL_REFUND, SLOTS, FrontDesk
+from .front import BUSINESS, GOODWILL_REFUND, SLOT_LABELS, AgentFrontDesk
 
 HERE = Path(__file__).parent
 PAIRING_TTL_S = 3600
 
 
 class DemoState:
-    def __init__(self, provider=None, ledger_path: str | None = None) -> None:
+    def __init__(self, provider=None, ledger_path: str | None = None, model_factory=None) -> None:
         self.provider = provider if provider is not None else FakeProvider()
         self.simulated = hasattr(self.provider, "approve")      # only the fake lets us play the payer
         if ledger_path is None:
@@ -40,45 +42,54 @@ class DemoState:
         self.agent = AgentGate(self.engine)
         self.owner = OwnerSide(self.engine)
         self.desk = HoldDesk(self.provider)
-        self.front = FrontDesk(self.agent, self.desk, self.checkout_url)
+        self.front = AgentFrontDesk(self.agent, self.desk, self.checkout_url, model_factory)
         self.paired_key: str | None = None
         self.declined: set[str] = set()
         self.lock = threading.RLock()
 
-    def checkout_url(self, order) -> str:
+    def checkout_url(self, order_id: str) -> str:
         if self.simulated:
-            return f"/checkout/{order.order_id}"
-        return order.approve_url
+            return f"/checkout/{order_id}"
+        return self.front.approve_urls.get(order_id, "/chat#end")     # PayPal's own payer page
 
     def new_pairing_code(self) -> str:
         return self.owner.new_pairing_code(PAIRING_TTL_S)
 
     # ---- scenarios (each one is self-contained with the fake provider)
     def _booking_for_scenario(self):
+        """(conversation, booking) with a held deposit, made through the agent like a customer would."""
         if self.simulated:
-            b = self.front.book(SLOTS[0])
-            self.provider.approve(b.order_id)          # the payer approves on the checkout page
-            self.front.on_payer_approved(b.order_id)
-            return b
-        b = self.front.latest("confirmed")
-        if b is None:
+            slot = self.front.free_slot()
+            if slot is None:                          # every slot taken: a new customer conversation
+                self.front.new_conversation()
+                slot = self.front.free_slot()
+            self.front.handle(f"Hi, please book {SLOT_LABELS[[*SLOTS].index(slot)]}")
+            found = self.front.latest("booked")
+            if found is None:
+                return None
+            s, b = found
+            self.provider.approve(b["order_id"])      # the payer approves on the checkout page
+            self.front.on_payer_approved(b["order_id"])
+            return found if b["status"] == "deposit_held" else None
+        found = self.front.latest("deposit_held")
+        if found is None:
             self.front.say("Book through the chat and approve the deposit on PayPal first.", who="system")
-        return b
+        return found
 
     def scenario(self, kind: str) -> bool:
         with self.lock:
             if kind == "cancel":
                 self.front.say("Scenario: cancellation", who="system")
-                b = self._booking_for_scenario()
-                if b is None:
+                if self._booking_for_scenario() is None:
                     return False
                 self.front.handle("I need to cancel, sorry.")
             elif kind in ("no_show", "goodwill"):
                 self.front.say("Scenario: no-show" + (" with goodwill refund" if kind == "goodwill" else ""), who="system")
-                b = self._booking_for_scenario()
-                if b is None:
+                found = self._booking_for_scenario()
+                if found is None:
                     return False
-                self.front.no_show(b, GOODWILL_REFUND if kind == "goodwill" else None)
+                s, b = found
+                self.front.no_show(s, b["id"], GOODWILL_REFUND if kind == "goodwill" else None)
             else:
                 return False
             return True
@@ -141,8 +152,9 @@ def default_provider():
     return FakeProvider()
 
 
-def create_app(provider=None, ledger_path: str | None = None) -> FastAPI:
-    state = DemoState(provider if provider is not None else default_provider(), ledger_path)
+def create_app(provider=None, ledger_path: str | None = None, model_factory=None) -> FastAPI:
+    """`model_factory(conversation_state) -> model`; default: Claude with a key, else offline."""
+    state = DemoState(provider if provider is not None else default_provider(), ledger_path, model_factory)
     app = FastAPI(title="Ask First Pay demo")
     app.state.demo = state
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -163,7 +175,8 @@ def create_app(provider=None, ledger_path: str | None = None) -> FastAPI:
     # ---- customer chat
     @app.get("/chat", response_class=HTMLResponse)
     def chat(request: Request):
-        return page(request, "chat.html", nav="chat", messages=state.front.messages, slots=SLOTS)
+        return page(request, "chat.html", nav="chat", messages=state.front.messages, slots=SLOT_LABELS,
+                    model_name=state.front.model_name)
 
     @app.post("/chat/send")
     async def chat_send(request: Request):
