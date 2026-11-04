@@ -88,6 +88,10 @@ class AgentFrontDesk:
         for b in state.bookings.values():          # a new order gets its payer link in the chat
             if b["order_id"] and b["order_id"] not in self._linked and b["status"] == "booked":
                 self._linked.add(b["order_id"])
+                if replies and self.messages[-1].who == "business" and self.messages[-1].link is None:
+                    self.messages[-1].link = self.checkout_url_for(b["order_id"])
+                    self.messages[-1].link_label = "Hold the deposit"
+                    continue
                 self.say(f"Hold the ${b['deposit']:.2f} deposit for {slot_label(b['slot'])} on PayPal.",
                          link=self.checkout_url_for(b["order_id"]), label="Hold the deposit")
         return replies
