@@ -151,3 +151,13 @@ def test_end_to_end_model_choice_follows_the_key(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-a-key")
     model = front.default_model_factory()(None)
     assert isinstance(model, AnthropicModel)                # constructed, never called here
+
+
+def test_end_to_end_customer_saying_they_paid_makes_the_agent_authorize(demo):
+    """The sandbox path: PayPal's own page has no callback into the demo, so the customer says so."""
+    demo.client.post("/chat/send", data={"message": "book Wed 18 Nov 10:00"})
+    assert demo.calls("authorize") == []
+    oid = next(iter(demo.provider.orders))
+    demo.provider.approve(oid)                               # the payer, on PayPal's page
+    demo.client.post("/chat/send", data={"message": "I paid, thanks"})
+    assert len(demo.calls("authorize")) == 1 and "is held" in demo.client.get("/chat").text

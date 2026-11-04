@@ -90,6 +90,10 @@ class OfflineFrontDeskModel(ScriptedModel):
             return [tool("request_capture", "q", booking_id=m.group(1), amount=b["deposit"] if b else 0)]
         if m := GOODWILL_RE.search(msg):
             return [tool("request_refund", "r", booking_id=m.group(2), amount=float(m.group(1)))]
+        if re.search(r"\b(i\s+(have\s+)?(paid|approved)|payment (is )?done)\b", low):
+            b = self._latest("booked")
+            if b is not None and b["order_id"]:
+                return [tool("confirm_deposit", "c", booking_id=b["id"])]
         if "cancel" in low:
             b = self._latest("deposit_held")
             if b is None:
