@@ -84,7 +84,7 @@ any hour, but they are the only one who decides when a customer's money is actua
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
   PayPal sandbox by setting environment variables.
-- TESTCOUNT automated tests, all offline, including the attacks listed under "Try to break it"
+- 116 automated tests, all offline, including the attacks listed under "Try to break it"
   in the README.
 
 ## What we learned
