@@ -1,0 +1,45 @@
+:root{--bg:#f6f7f9;--fg:#14181f;--muted:#4a5260;--card:#fff;--line:#c9ced8;--accent:#0b5cad;--accent-fg:#fff;--ok:#0b6b3a;--okbg:#e4f5ea;--bad:#9b1c1c;--badbg:#fdeaea;--neutral:#e9ecf2}
+@media (prefers-color-scheme:dark){:root{--bg:#10141b;--fg:#eef1f6;--muted:#b4bccb;--card:#1a212c;--line:#3a4455;--accent:#6db3ff;--accent-fg:#06111f;--ok:#7fdca5;--okbg:#10301f;--bad:#ff9d9d;--badbg:#3a1515;--neutral:#222b38}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main,.top,.foot{max-width:760px;margin:0 auto;padding:0 16px}
+main{padding-bottom:32px}
+h1{font-size:1.45rem;line-height:1.25;margin:20px 0 8px} h1 small{display:block;font-size:.9rem;color:var(--muted);font-weight:400}
+h2{font-size:1.1rem;margin:24px 0 8px}
+a{color:var(--accent)}
+.skip{position:absolute;left:-999px} .skip:focus{left:8px;top:8px;background:var(--card);padding:8px;z-index:9}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.top{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;justify-content:space-between;padding-top:8px;padding-bottom:8px}
+.brand{font-weight:700;color:var(--fg);text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+.brand span{font-weight:400;color:var(--muted);margin-left:6px}
+.top nav{display:flex;gap:4px}
+.top nav a{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;padding:0 12px;border-radius:8px;color:var(--fg)}
+.top nav a[aria-current=page]{background:var(--accent);color:var(--accent-fg)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn{min-height:44px;min-width:44px;padding:0 18px;border:2px solid var(--accent);background:var(--accent);color:var(--accent-fg);border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.btn.secondary{background:transparent;color:var(--accent)} .btn.small{margin-top:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.stack{display:grid;gap:10px} .stack .btn{width:100%}
+.row{display:flex;gap:10px;flex-wrap:wrap} .row .btn{flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.card.ok{background:var(--okbg);color:var(--ok);border-color:var(--ok)} .card.bad{background:var(--badbg);color:var(--bad);border-color:var(--bad)} .card.neutral{background:var(--neutral);color:var(--fg)}
+.hint{color:var(--muted);font-size:.9rem} code{font-size:.9em;word-break:break-all}
+.chat{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:88%;padding:8px 12px;border-radius:14px;background:var(--card);border:1px solid var(--line)}
+.msg p{margin:2px 0}.msg .who{font-size:.78rem;color:var(--muted)}
+.msg.customer{align-self:flex-end;background:var(--accent);color:var(--accent-fg);border-color:var(--accent)} .msg.customer .who{color:inherit;opacity:.85}
+.msg.system{align-self:center;background:var(--neutral);font-size:.92rem}
+.composer{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:12px}
+.composer label{grid-column:1/-1;font-weight:600}
+.composer input{min-height:44px;padding:0 12px;font:inherit;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg)}
+.pending-list{list-style:none;padding:0;display:grid;gap:12px}
+.mandate dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:8px 0} .mandate dt{color:var(--muted)} .mandate dd{margin:0;font-weight:600}
+.result{min-height:1.5em;margin:6px 0 0}
+.grid-wrap{width:100%;overflow-x:auto}
+table.plain{border-collapse:collapse;width:100%;font-size:.92rem}
+table.plain th,table.plain td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left}
+tr.rejected td:nth-child(3),tr.failed td:nth-child(3){color:var(--bad);font-weight:700} tr.executed td:nth-child(3){color:var(--ok);font-weight:700}
+.js-grid .plain{display:none}
+.ag-root-wrapper{border-radius:8px}
+.foot{color:var(--muted);font-size:.85rem;padding-top:16px;padding-bottom:24px}
+.steps li{margin:6px 0}
