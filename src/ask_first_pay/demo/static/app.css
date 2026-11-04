@@ -14,7 +14,7 @@ a{color:var(--accent)}
 .brand span{font-weight:400;color:var(--muted);margin-left:6px}
 .top nav{display:flex;gap:4px}
 .top nav a{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;padding:0 12px;border-radius:8px;color:var(--fg)}
-.top nav a[aria-current=page]{background:var(--accent);color:var(--accent-fg)}
+.top nav a[aria-current=page]{background:var(--accent);color:var(--accent-fg);text-decoration:none}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .btn{min-height:44px;min-width:44px;padding:0 18px;border:2px solid var(--accent);background:var(--accent);color:var(--accent-fg);border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 .btn.secondary{background:transparent;color:var(--accent)} .btn.small{margin-top:6px}

@@ -12,7 +12,7 @@
       {field: 'exp_text', headerName: 'Expires', minWidth: 120}
     ],
     ledger: [
-      {field: 'n', headerName: '#', maxWidth: 70},
+      {field: 'n', headerName: '#', minWidth: 70, maxWidth: 80},
       {field: 'time', headerName: 'Time (UTC)', minWidth: 110},
       {field: 'result', headerName: 'Result', minWidth: 110,
        cellStyle: function (p) { return {fontWeight: 700, color: p.value === 'executed' ? '#0b6b3a' : '#9b1c1c'}; }},
