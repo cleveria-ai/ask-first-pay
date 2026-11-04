@@ -134,3 +134,39 @@ def test_describe_comes_from_signed_fields(world):
     m = agent.request("capture_deposit", auth.authorization_id, 7.5)
     text = agent.describe(m["jti"])
     assert auth.authorization_id in text and "7.50" in text and "pending" in text
+
+
+class _Flaky:
+    """Wraps a provider: the first capture times out AFTER the money moved (the worst case)."""
+
+    def __init__(self, inner):
+        self.inner, self.request_ids, self.failed = inner, [], False
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def capture(self, authorization_id, amount, request_id, final_capture=True):
+        self.request_ids.append(request_id)
+        c = self.inner.capture(authorization_id, amount, request_id, final_capture)
+        if not self.failed:
+            self.failed = True
+            raise ProviderError("TRANSIENT", "read timeout", transient=True)
+        return c
+
+
+def test_transient_failure_is_retried_with_the_same_request_id_and_moves_money_once(tmp_path):
+    from ask_first import generate_pair, sign_envelope
+    from ask_first_pay.fake_provider import FakeProvider
+    from ask_first_pay.gate import make_engine, split
+
+    fake = FakeProvider()
+    flaky = _Flaky(fake)
+    priv, pub = generate_pair()
+    gate, owner = split(make_engine(flaky, pub, str(tmp_path / "l.jsonl")))
+    o = fake.create_order(10.0, "USD", "b-1"); fake.approve(o.order_id)
+    a = fake.authorize(o.order_id)
+    m = gate.request("capture_deposit", a.authorization_id, 10.0)
+    owner.approve(m["jti"], sign_envelope(priv, owner.pending[m["jti"]]))
+    out = gate.execute(m["jti"], "capture_deposit", a.authorization_id, 10.0)
+    assert out["result"] == "executed" and flaky.request_ids == [m["jti"], m["jti"]]
+    assert len(fake.captures) == 1
