@@ -61,7 +61,14 @@ It prints three URLs and a one-time pairing code:
 Without `ANTHROPIC_API_KEY` the agent runs on an offline scripted model through the same loop and the
 same tools; with it, Claude chooses the tools (`ASK_FIRST_MODEL` overrides the model id). Without
 `PAYPAL_CLIENT_ID` payments go to an in-memory fake that follows PayPal's rules (honor period,
-29-day expiry, idempotent request ids).
+29-day expiry, idempotent request ids), and a local simulator plays PayPal's webhooks: the
+checkout approval reaches the agent as a signed `CHECKOUT.ORDER.APPROVED` that is verified
+before anything happens.
+
+State lives in memory by default. `ASK_FIRST_DB=/path/shop.sqlite` (optionally
+`ASK_FIRST_SHOP=<id>`) keeps it in SQLite across restarts: bookings, mandates, signed approvals,
+declines, the paired key, handled webhook ids and, above all, which mandates are already used, so
+a restart cannot reopen a replay.
 
 **The 60-second path:** open `/owner` and enter the pairing code; open `/chat`, book, press
 **Hold the deposit** and **Approve**; press **No-show**; tap **Approve** on `/owner`; open `/ledger`
@@ -79,6 +86,9 @@ and press **Agent tries to replay the last mandate**. Then **Cancellation** and 
 | Ask the agent to capture or refund more than is held or captured | refused before the owner is even asked (`tests/agent/test_agent_holds.py`) |
 | A capture whose PayPal call times out after the money moved | retried with the same `PayPal-Request-Id`: one capture (`tests/test_skeleton.py -k transient`) |
 | A no-show 5 days after booking (past PayPal's 3-day honor period) | the agent reauthorizes first, the owner signs for the new authorization (`-k honor_period`) |
+| POST a forged or altered webhook to `/webhooks/paypal` | `400 bad_signature`, nothing held (`tests/demo/test_demo_webhooks.py`) |
+| A genuine webhook claiming a capture or refund | noted in the chat; no PayPal call, no mandate: webhooks never move money |
+| Restart with `ASK_FIRST_DB`, then replay the last mandate | still `rejected · replay` (`tests/demo/test_demo_store.py`) |
 
 Tests: `python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/python -m pytest -q`.
 
@@ -94,13 +104,22 @@ Tests: `python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/
    scripts/demo.sh
    ```
 3. Book in the chat; **Hold the deposit** now opens PayPal's sandbox approval page. After paying,
-   tell the chat you approved it so the agent authorizes the order. Approvals on `/owner` then
-   capture, void or refund in the sandbox.
+   PayPal's `CHECKOUT.ORDER.APPROVED` webhook tells the agent to authorize the order, if you
+   subscribed one: expose the demo (a tunnel), add a sandbox webhook for
+   `https://<host>/webhooks/paypal`, and `export PAYPAL_WEBHOOK_ID=<its id>` before starting.
+   Without it, tell the chat you approved it. Approvals on `/owner` then capture, void or refund
+   in the sandbox.
 
 The adapter (`src/ask_first_pay/paypal/`) talks only to `api-m.sandbox.paypal.com` unless it is
 built with `environment="production", allow_production=True`. The sandbox path is covered by
 offline tests with recorded-shape responses; `tests/paypal/test_paypal_live.py` runs it for real
 (`pytest -m live`, needs the two variables).
+
+Webhooks (`src/ask_first_pay/paypal/webhooks.py`) are verified locally the way PayPal documents
+it: SHA256withRSA over `transmission_id|transmission_time|webhook_id|crc32(body)`, with the
+certificate from `paypal-cert-url` (https on `*.paypal.com` only), a 5-minute freshness window and
+deduplication by event id. Offline, the certificate comes from the local simulator; against the
+sandbox it is downloaded from PayPal (not yet run live).
 
 ## The three stories
 
@@ -119,7 +138,12 @@ customer typing "the owner approved" is rejected by the gate and written to the 
   `src/ask_first_pay/agent/tools.py`, and none of them approves or moves money. Python itself is
   not a capability-safe language, so this is a design boundary for the model, not a sandbox for
   hostile code running in the same process.
-- The demo keeps state in memory and serves one shop; the owner key lives in one browser.
+- One demo process serves one shop. With `ASK_FIRST_DB` the state survives restarts and one file
+  can hold several shops, but there is no login or routing between shops. The owner key lives in
+  one browser. The receipt-signing key is not persisted, so receipts made before a restart are
+  checked against the old server key.
+- Webhook verification against PayPal's real certificate has not been run (no keys in this
+  repository); the offline tests use a local simulator with its own certificate.
 - Claude and the PayPal sandbox paths are covered by offline tests with recorded-shape responses;
   a live run needs your own keys (below).
 

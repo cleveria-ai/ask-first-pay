@@ -17,8 +17,8 @@ any hour, but they are the only one who decides when a customer's money is actua
 ## What it does
 
 - A customer books over chat (WhatsApp-style, simulated in the demo). The agent creates a PayPal
-  order with intent **AUTHORIZE** and, after the customer approves it, authorizes it: the 10.00
-  deposit is **held, not charged**.
+  order with intent **AUTHORIZE** and, when PayPal's signed `CHECKOUT.ORDER.APPROVED` webhook
+  says the customer approved it, authorizes it: the 10.00 deposit is **held, not charged**.
 - When money has to move, the agent can only **ask**:
   - **No-show:** it requests a `capture_deposit` mandate for that authorization and amount. If
     the visit is more than three days after the booking (past PayPal's honor period), it first
@@ -56,6 +56,12 @@ any hour, but they are the only one who decides when a customer's money is actua
   void or refund except through an approved mandate. The gated tools also refuse to ask for more
   than is held (capture) or still captured (refund), so the owner is never shown an inflated
   number to approve.
+- **Webhooks:** `/webhooks/paypal` verifies each delivery locally the way PayPal signs it
+  (SHA256withRSA over transmission id, time, webhook id and the body's CRC32, certificate only
+  from `*.paypal.com`, 5-minute window, dedupe by event id). A webhook can make the agent hold a
+  deposit; it can never capture, void or refund. Offline, a local simulator plays PayPal.
+- **Persistence:** optional SQLite (`ASK_FIRST_DB`), one row per shop, so a restart keeps
+  bookings, signed approvals and the set of used mandates (a restart cannot reopen a replay).
 - **Demo:** FastAPI + Jinja pages (chat, owner phone, ledger), WebCrypto for the owner's key,
   AG Grid Community for the ledger table, no CDN.
 - A fake PayPal provider follows the same rules (3-day honor period, 29-day expiry, idempotent
@@ -84,7 +90,7 @@ any hour, but they are the only one who decides when a customer's money is actua
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
   PayPal sandbox by setting environment variables.
-- 116 automated tests, all offline, including the attacks listed under "Try to break it"
+- 159 automated tests, all offline, including the attacks listed under "Try to break it"
   in the README.
 
 ## What we learned
@@ -100,13 +106,14 @@ any hour, but they are the only one who decides when a customer's money is actua
 ## What's next
 
 - A real WhatsApp Business channel instead of the simulated chat.
-- PayPal webhooks (order approved, authorization voided or expired) instead of the customer
-  saying "I paid".
+- Run the webhook path against the live sandbox certificate (it is verified offline today).
+- Several shops behind one deployment, with a login per owner (the SQLite store already keys
+  everything by shop).
 - A daily sweep that reauthorizes holds before the 29-day expiry, and reminders to the owner.
 - Per-owner policies (for example "approve no-show captures under 20.00 automatically") expressed
   as standing mandates with their own cap and expiry.
 
 ## Built with
 
-python, fastapi, jinja, httpx, paypal-orders-v2, paypal-payments-v2, anthropic-claude, ed25519,
+python, fastapi, jinja, httpx, sqlite, paypal-webhooks, paypal-orders-v2, paypal-payments-v2, anthropic-claude, ed25519,
 webcrypto, ag-grid
