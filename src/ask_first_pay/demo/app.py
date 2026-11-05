@@ -12,7 +12,10 @@ import threading
 import time
 from pathlib import Path
 
+from dataclasses import asdict
+
 from ask_first import MandateRejected, generate_pair, public_key_hex
+from ask_first.keys import public_key_from_hex
 from ask_first.canonical import canonical
 from urllib.parse import parse_qs
 
@@ -23,9 +26,11 @@ from fastapi.templating import Jinja2Templates
 
 from ..fake_provider import FakeProvider
 from ..paypal.webhooks import CertVerifier, WebhookReceiver, WebhookRejected, WebhookSimulator, fetch_paypal_cert
+from ..agent.state import AgentState
 from ..agent.tools import SLOTS
+from ..store import SqliteStore
 from ..gate import AgentGate, HoldDesk, OwnerSide, make_engine
-from .front import BUSINESS, GOODWILL_REFUND, SLOT_LABELS, AgentFrontDesk
+from .front import BUSINESS, GOODWILL_REFUND, SLOT_LABELS, AgentFrontDesk, Message
 
 HERE = Path(__file__).parent
 PAIRING_TTL_S = 3600
@@ -37,9 +42,13 @@ HEADLINES = {"capture_deposit": "Keep up to ${cap} of the held deposit (no-show)
 
 
 class DemoState:
-    def __init__(self, provider=None, ledger_path: str | None = None, model_factory=None) -> None:
+    def __init__(self, provider=None, ledger_path: str | None = None, model_factory=None,
+                 store: SqliteStore | None = None) -> None:
         self.provider = provider if provider is not None else FakeProvider()
         self.simulated = hasattr(self.provider, "approve")      # only the fake lets us play the payer
+        self.store = store
+        if ledger_path is None and store is not None:
+            ledger_path = store.ledger_path                     # the ledger survives restarts too
         if ledger_path is None:
             ledger_path = os.environ.get("ASK_FIRST_DEMO_LEDGER") or str(
                 Path(tempfile.mkdtemp(prefix="ask-first-demo-")) / "ledger.jsonl")
@@ -54,6 +63,60 @@ class DemoState:
         self.scenario_used: set[str] = set()   # held bookings a scenario already acted on
         self.lock = threading.RLock()
         self.webhook_sim, self.webhooks = self._webhooks()
+        if store is not None and (snap := store.load()) is not None:
+            self.restore(snap)
+
+    # ---- optional persistence (ASK_FIRST_DB): see ask_first_pay/store.py
+    def snapshot(self) -> dict:
+        e, f = self.engine, self.front
+        return {"version": 1, "simulated": self.simulated,
+                "engine": {"pending": e.pending, "approved": e.approved, "used": sorted(e.used)},
+                "paired_key": self.paired_key, "declined": sorted(self.declined),
+                "scenario_used": sorted(self.scenario_used),
+                "front": {"messages": [asdict(m) for m in f.messages],
+                          "conversations": [asdict(s) for s in f.conversations],
+                          "linked": sorted(f._linked), "approve_urls": f.approve_urls,
+                          "goodwill": f.goodwill, "turns": f.turns},
+                "provider": self.provider.to_dict() if hasattr(self.provider, "to_dict") else None}
+
+    def restore(self, snap: dict) -> None:
+        """Back to the saved state. Approvals are restored as signed: the engine re-verifies each
+        signature against the paired key when the mandate is executed, as always."""
+        if snap.get("version") != 1:
+            raise ValueError(f"unknown snapshot version {snap.get('version')!r}")
+        if snap.get("simulated") != self.simulated:
+            raise ValueError("this database was written with a different payment provider")
+        e, f = self.engine, self.front
+        # In place: OwnerSide and AgentGate hold references to these very containers.
+        e.pending.clear()
+        e.pending.update({k: dict(v) for k, v in snap["engine"]["pending"].items()})
+        e.approved.clear()
+        e.approved.update({k: {"mandate": dict(v["mandate"]), "signature": v["signature"]}
+                           for k, v in snap["engine"]["approved"].items()})
+        # Used = what the snapshot says, plus anything the ledger shows was executed or failed
+        # (a crash between the PayPal call and the save must not reopen that mandate).
+        e.used.update(set(snap["engine"]["used"]) | {str(r.get("mandate_id")) for r in e.ledger.entries()
+                                                if r.get("result") in ("executed", "failed")})
+        self.paired_key = snap["paired_key"]
+        if self.paired_key:
+            e.person_pub = public_key_from_hex(self.paired_key)
+        self.declined, self.scenario_used = set(snap["declined"]), set(snap["scenario_used"])
+        fr = snap["front"]
+        f.messages = [Message(**m) for m in fr["messages"]]
+        f.conversations, f._models = [], {}
+        for s in fr["conversations"]:
+            st = AgentState(**s)
+            f.conversations.append(st)
+            f._models[id(st)] = f.model_factory(st)
+        f._linked, f.approve_urls = set(fr["linked"]), dict(fr["approve_urls"])
+        f.goodwill, f.turns = {k: float(v) for k, v in fr["goodwill"].items()}, int(fr["turns"])
+        if snap.get("provider") is not None and hasattr(self.provider, "load_dict"):
+            self.provider.load_dict(snap["provider"])
+
+    def persist(self) -> None:
+        if self.store is not None:
+            with self.lock:
+                self.store.save(self.snapshot())
 
     # ---- PayPal webhooks (they can hold a deposit, never move money)
     def _webhooks(self):
@@ -65,12 +128,14 @@ class DemoState:
                     "PAYMENT.AUTHORIZATION.EXPIRED": self._on_authorization("expired"),
                     "PAYMENT.CAPTURE.COMPLETED": self._note("a capture completed"),
                     "PAYMENT.CAPTURE.REFUNDED": self._note("a refund completed")}
+        dedupe = ({"seen": self.store.seen_event, "remember": self.store.remember_event}
+                  if self.store is not None else {})
         if self.simulated:
             sim = WebhookSimulator()
-            return sim, WebhookReceiver(sim.verifier(), handlers)
+            return sim, WebhookReceiver(sim.verifier(), handlers, **dedupe)
         webhook_id = os.environ.get("PAYPAL_WEBHOOK_ID")
         if webhook_id:
-            return None, WebhookReceiver(CertVerifier(webhook_id, fetch_paypal_cert), handlers)
+            return None, WebhookReceiver(CertVerifier(webhook_id, fetch_paypal_cert), handlers, **dedupe)
         return None, None
 
     def _booking_with(self, key: str, value: str):
@@ -250,11 +315,26 @@ async def _json(request: Request) -> dict:
     return body if isinstance(body, dict) else {}
 
 
-def create_app(provider=None, ledger_path: str | None = None, model_factory=None) -> FastAPI:
+def default_store() -> SqliteStore | None:
+    """SQLite only when ASK_FIRST_DB names a file; memory otherwise (the default)."""
+    path = os.environ.get("ASK_FIRST_DB")
+    return SqliteStore(path, os.environ.get("ASK_FIRST_SHOP", "default")) if path else None
+
+
+def create_app(provider=None, ledger_path: str | None = None, model_factory=None,
+               store: SqliteStore | None = None) -> FastAPI:
     """`model_factory(conversation_state) -> model`; default: Claude with a key, else offline."""
-    state = DemoState(provider if provider is not None else default_provider(), ledger_path, model_factory)
+    state = DemoState(provider if provider is not None else default_provider(), ledger_path, model_factory,
+                      store if store is not None else default_store())
     app = FastAPI(title="Ask First Pay demo")
     app.state.demo = state
+
+    @app.middleware("http")
+    async def persist_after_writes(request: Request, call_next):
+        response = await call_next(request)
+        if request.method == "POST":
+            state.persist()                 # a no-op without ASK_FIRST_DB
+        return response
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
 
