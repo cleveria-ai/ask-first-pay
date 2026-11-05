@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..fake_provider import FakeProvider
+from ..paypal.webhooks import CertVerifier, WebhookReceiver, WebhookRejected, WebhookSimulator, fetch_paypal_cert
 from ..agent.tools import SLOTS
 from ..gate import AgentGate, HoldDesk, OwnerSide, make_engine
 from .front import BUSINESS, GOODWILL_REFUND, SLOT_LABELS, AgentFrontDesk
@@ -52,6 +53,71 @@ class DemoState:
         self.declined: set[str] = set()
         self.scenario_used: set[str] = set()   # held bookings a scenario already acted on
         self.lock = threading.RLock()
+        self.webhook_sim, self.webhooks = self._webhooks()
+
+    # ---- PayPal webhooks (they can hold a deposit, never move money)
+    def _webhooks(self):
+        """With the fake provider, a local simulator plays PayPal and signs its events; with the
+        sandbox, PAYPAL_WEBHOOK_ID turns on verification against PayPal's certificate. With
+        neither, the receiver is off and the customer still says "I paid" in the chat."""
+        handlers = {"CHECKOUT.ORDER.APPROVED": self._on_order_approved,
+                    "PAYMENT.AUTHORIZATION.VOIDED": self._on_authorization("voided"),
+                    "PAYMENT.AUTHORIZATION.EXPIRED": self._on_authorization("expired"),
+                    "PAYMENT.CAPTURE.COMPLETED": self._note("a capture completed"),
+                    "PAYMENT.CAPTURE.REFUNDED": self._note("a refund completed")}
+        if self.simulated:
+            sim = WebhookSimulator()
+            return sim, WebhookReceiver(sim.verifier(), handlers)
+        webhook_id = os.environ.get("PAYPAL_WEBHOOK_ID")
+        if webhook_id:
+            return None, WebhookReceiver(CertVerifier(webhook_id, fetch_paypal_cert), handlers)
+        return None, None
+
+    def _booking_with(self, key: str, value: str):
+        for s in self.front.conversations:
+            for b in s.bookings.values():
+                if value and b.get(key) == value:
+                    return s, b
+        return None
+
+    def _on_order_approved(self, resource: dict) -> str:
+        found = self._booking_with("order_id", str(resource.get("id", "")))
+        if found is None or found[1]["status"] != "booked":
+            return "no booking waiting for this order"
+        self.front.on_payer_approved(found[1]["order_id"], source="PayPal webhook")
+        return found[1]["status"]
+
+    def _on_authorization(self, what: str):
+        def handle(resource: dict) -> str:
+            found = self._booking_with("authorization_id", str(resource.get("id", "")))
+            if found is None:
+                return "no booking holds this authorization"
+            s, b = found
+            if what == "expired" and b["status"] == "deposit_held":
+                b["status"] = "hold_expired"        # the agent can no longer ask to capture it
+            self.front.say(f"PayPal webhook: the hold {b['authorization_id']} for {b['id']} was {what}.", who="system")
+            return b["status"]
+        return handle
+
+    def _note(self, what: str):
+        def handle(resource: dict) -> str:
+            self.front.say(f"PayPal webhook: {what} ({resource.get('id', '?')}).", who="system")
+            return "noted"
+        return handle
+
+    def receive_webhook(self, headers: dict, body: bytes) -> dict:
+        if self.webhooks is None:
+            raise WebhookRejected("not_configured", "set PAYPAL_WEBHOOK_ID to receive sandbox webhooks")
+        with self.lock:
+            return self.webhooks.receive(headers, body)
+
+    def payer_approved_on_checkout(self, order_id: str) -> None:
+        """The simulated checkout: the payer approves, and the simulated PayPal tells us so with
+        a signed CHECKOUT.ORDER.APPROVED webhook, the same path the sandbox uses."""
+        with self.lock:
+            self.provider.approve(order_id)
+            headers, body = self.webhook_sim.event("CHECKOUT.ORDER.APPROVED", {"id": order_id, "status": "APPROVED"})
+            self.receive_webhook(headers, body)
 
     def checkout_url(self, order_id: str) -> str:
         if self.simulated:
@@ -79,8 +145,7 @@ class DemoState:
             if found is None:
                 return None
             s, b = found
-            self.provider.approve(b["order_id"])      # the payer approves on the checkout page
-            self.front.on_payer_approved(b["order_id"])
+            self.payer_approved_on_checkout(b["order_id"])   # the payer approves; PayPal's webhook says so
             self.scenario_used.add(b["id"])
             return found if b["status"] == "deposit_held" else None
         found = self.front.latest("deposit_held")
@@ -231,10 +296,24 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     @app.post("/checkout/{order_id}/approve")
     def checkout_approve(order_id: str):
         if state.simulated and order_id in state.provider.orders:
-            with state.lock:
-                state.provider.approve(order_id)
-                state.front.on_payer_approved(order_id)
+            state.payer_approved_on_checkout(order_id)
         return RedirectResponse("/chat#end", status_code=303)
+
+    # ---- PayPal webhooks
+    @app.post("/webhooks/paypal")
+    async def paypal_webhook(request: Request):
+        body = await request.body()
+        try:
+            out = state.receive_webhook(dict(request.headers), body)
+        except WebhookRejected as e:
+            code = 503 if e.reason == "not_configured" else 400
+            return JSONResponse({"ok": False, "reason": e.reason, "detail": e.detail}, status_code=code)
+        return {"ok": True, **out}
+
+    @app.get("/webhooks/paypal/events")
+    def paypal_webhook_events():
+        return {"enabled": state.webhooks is not None, "simulated": state.webhook_sim is not None,
+                "events": list(state.webhooks.log) if state.webhooks else []}
 
     # ---- scenarios
     @app.post("/scenario/{kind}")

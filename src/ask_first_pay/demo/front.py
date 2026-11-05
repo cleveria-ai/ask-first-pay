@@ -133,11 +133,12 @@ class AgentFrontDesk:
         return next((s for s in SLOTS if s not in taken), None)
 
     # ---- events relayed to the agent ----------------------------------------------------
-    def on_payer_approved(self, order_id: str) -> None:
+    def on_payer_approved(self, order_id: str, source: str | None = None) -> None:
         for s in self.conversations:
             b = next((x for x in s.bookings.values() if x["order_id"] == order_id), None)
             if b is not None and b["status"] == "booked":
-                self.say("The customer approved the deposit on PayPal.", who="system")
+                self.say(f"{source}: the customer approved the deposit on PayPal." if source
+                         else "The customer approved the deposit on PayPal.", who="system")
                 self.turn(f"[payments] The customer approved PayPal order {order_id} for {b['id']}. "
                           "Confirm the deposit hold.", s)
                 return
