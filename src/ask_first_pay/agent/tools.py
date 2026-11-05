@@ -50,8 +50,10 @@ class Toolbox:
         self.s, self.gate, self.desk = state, gate, desk
 
     def call(self, name: str, args: dict) -> dict:
-        if name not in _NAMES:
+        if not isinstance(name, str) or name not in _NAMES:
             return {"error": f"unknown tool {name!r}"}
+        if not isinstance(args, dict):
+            return {"error": "bad call: arguments must be an object"}
         try:
             return getattr(self, f"t_{name}")(**args)
         except MandateRejected as e:

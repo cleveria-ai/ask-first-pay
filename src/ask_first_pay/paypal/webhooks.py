@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import urlparse
 
+import httpx
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
@@ -52,8 +53,17 @@ def signed_message(transmission_id: str, transmission_time: str, webhook_id: str
 
 def cert_url_allowed(url: str) -> bool:
     """Only an https URL on a paypal.com host may name the signing certificate."""
-    u = urlparse(url)
-    host = (u.hostname or "").lower()
+    if not isinstance(url, str) or not url.isascii() or not url.isprintable() or any(c in url for c in " \\@#?%"):
+        return False       # backslash, userinfo, fragment, query, escapes, controls: parsers disagree on these
+    try:
+        u = urlparse(url)
+        host = (u.hostname or "").lower()
+        if u.port not in (None, 443) or u.username or u.password:
+            return False
+        if httpx.URL(url).host.lower() != host:        # the host we check must be the host we connect to
+            return False
+    except ValueError:
+        return False
     return u.scheme == "https" and (host == "paypal.com" or host.endswith(".paypal.com"))
 
 
@@ -69,7 +79,6 @@ def _parse_time(value: str) -> float:
 
 def fetch_paypal_cert(url: str) -> bytes:
     """Live path (sandbox): download the PEM certificate from PayPal. Not used offline."""
-    import httpx
     if not cert_url_allowed(url):
         raise WebhookRejected("bad_cert_url", url)
     r = httpx.get(url, timeout=10.0)

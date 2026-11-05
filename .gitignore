@@ -4,6 +4,9 @@ __pycache__/
 .pytest_cache/
 data/
 .env
+*.sqlite
+*.sqlite-*
+build/
 *.jsonl
 node_modules/
 docs/rules/
