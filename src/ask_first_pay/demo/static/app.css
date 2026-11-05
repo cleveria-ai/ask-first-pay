@@ -103,6 +103,14 @@ input:focus-visible{border-color:var(--accent);outline-offset:0}
 .chip.ok{background:var(--ok-bg);color:var(--ok)} .chip.bad{background:var(--bad-bg);color:var(--bad)}
 .chip.warn{background:var(--warn-bg);color:var(--warn)} .chip.info{background:var(--info-bg);color:var(--info)}
 
+/* the same chips inside AG Grid, without a cell renderer: the cell keeps plain text */
+.ag-cell.cell-chip{font-weight:700;font-size:var(--fs-xs)}
+.ag-cell.cell-chip::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:8px;vertical-align:middle}
+.ag-cell.tone-ok{color:var(--ok);background:var(--ok-bg)} .ag-cell.tone-bad{color:var(--bad);background:var(--bad-bg)}
+.ag-cell.tone-warn{color:var(--warn);background:var(--warn-bg)} .ag-cell.tone-info{color:var(--info);background:var(--info-bg)}
+.ag-cell.tone-neutral{color:var(--neutral);background:var(--neutral-bg)}
+.ag-cell.cell-mono{font-family:var(--mono);font-size:var(--fs-xs)}
+
 /* chat */
 .chat{list-style:none;margin:0;padding:var(--s3);display:flex;flex-direction:column;gap:var(--s2);background:var(--surface-2);border-radius:var(--radius);border:1px solid var(--line)}
 .chat.scroll{max-height:min(56vh,520px);overflow-y:auto;overscroll-behavior:contain}

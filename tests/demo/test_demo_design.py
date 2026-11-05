@@ -77,7 +77,7 @@ def test_design_ag_grid_is_vendored_with_license():
 @pytest.mark.parametrize("feature", ["themeQuartz.withParams", "isExternalFilterPresent", "doesExternalFilterPass",
                                      "quickFilterText", "exportDataAsCsv", "agTextColumnFilter",
                                      "agNumberColumnFilter", "rowSelection", "onSelectionChanged",
-                                     "cellRenderer", "ensureDomOrder", "getRowId"])
+                                     "cellClass", "valueGetter", "ensureDomOrder", "getRowId"])
 def test_design_ag_grid_features_used(feature):
     assert feature in GRID
 
@@ -194,3 +194,20 @@ def test_design_pages_load_their_scripts_locally(demo):
 
 def test_design_favicon_is_not_a_404(demo):
     assert demo.client.get("/favicon.ico").status_code == 204
+
+
+def test_design_grid_cells_stay_text_and_tones_are_a_fixed_set():
+    """Status chips come from cellClass only; the tone class is looked up in a fixed set."""
+    assert "cellRenderer" not in GRID and "innerHTML" not in GRID and "valueFormatter" not in GRID
+    assert "TONES[p.data.tone]" in GRID
+
+
+def test_design_same_origin_form_posts_pass_and_referrer_keeps_origin(demo):
+    """Under `Referrer-Policy: no-referrer` Chromium sends `Origin: null` on same-origin form
+    POSTs, which the CSRF check refuses: every button broke in a real browser."""
+    h = demo.client.get("/chat").headers
+    assert h["referrer-policy"] == "same-origin"
+    assert "font-src 'self' data:" in h["content-security-policy"]       # AG Grid's icon font
+    r = demo.client.post("/scenario/no_show", headers={"origin": "http://testserver", "sec-fetch-site": "same-origin"})
+    assert r.status_code == 303
+    assert demo.client.post("/scenario/no_show", headers={"origin": "null"}).status_code == 403

@@ -422,9 +422,11 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
         response = await call_next(request)
         response.headers["X-Frame-Options"] = "DENY"            # the one-tap Approve button must not be framed
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        # same-origin, not no-referrer: under no-referrer Chromium sends `Origin: null` on our own
+        # form POSTs, and the CSRF check above would refuse every button on the page.
+        response.headers["Referrer-Policy"] = "same-origin"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
             "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
         return response
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")

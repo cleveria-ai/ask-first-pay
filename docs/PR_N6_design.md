@@ -25,8 +25,8 @@ with nothing to replay says so.
 
 **AG Grid Community** (`static/grid.js`, vendored 36.3.0, MIT license file present): sorting,
 text/number column filters, external filters (Executed/Rejected, Capture/Void/Refund on the
-ledger; Pending/Used/Declined on the owner page), quick-filter search, status-chip cell
-renderers, hash cells linking to the raw row, single-row selection driving a detail panel with
+ledger; Pending/Used/Declined on the owner page), quick-filter search, status chips through `valueGetter` + `cellClass`
+(no cell renderers; cell values stay text), single-row selection driving a detail panel with
 the signed fields and the chain link, CSV export, Theming API fed from the CSS tokens (light and
 dark), keyboard Enter to open a row. New `GET /ledger/entry/{n}` returns the row as written
 (`hash`, `prev`) so the chain link can be followed. The plain table stays as the no-JS fallback.
@@ -51,9 +51,9 @@ https://github.com/cleveria-ai/ask-first-pay/blob/n6-design/docs/screenshots/07-
 
 ```
 $ .venv/bin/python -m pytest -q          # before: 165 passed, 1 deselected
-192 passed, 1 deselected in 8.45s
+387 passed, 1 deselected (after merging main with N7)
 ```
-27 new tests in `tests/demo/test_demo_design.py`: token contrast (light and dark), 44 px
+29 new tests in `tests/demo/test_demo_design.py`: token contrast (light and dark), 44 px
 targets, no external URL in static files, vendored AG Grid and its license, the AG Grid features
 `grid.js` relies on, ledger rows carry the signed fields and `prev == previous hash`, the raw
 row endpoint, mandate tones and ledger refs, the "what just happened" line before any action,
@@ -76,6 +76,19 @@ d = 0/10 = 0.00
 Browser check (headless Chromium 1280x720, offline demo): ledger 2 rows; "Rejected" filter 1;
 "Void" 0; search "replay" 1; CSV downloads `ask-first-pay-ledger.csv`; row click opens the
 detail on the ledger and the owner page; no console errors.
+
+## After merging N7 (main)
+
+- `tests/security/test_security_http.py::test_grid_js_never_renders_cell_values_as_html` failed
+  with both branches together: `grid.js` had cell renderers (they built DOM nodes with
+  `textContent`, but the test forbids renderers outright). Now no renderer, no `innerHTML`, no
+  `valueFormatter`: chips come from `cellClass` with the tone looked up in a fixed set, the result
+  text from `valueGetter`, the hash link moved to the row detail (built with `textContent`).
+- Found in the browser, not by the suite: N7's `Referrer-Policy: no-referrer` makes Chromium send
+  `Origin: null` on the pages' own form POSTs, so the CSRF check returned 403 on every scenario,
+  chat and replay button. Changed to `same-origin` (no referrer leaves the site; Origin is sent).
+  Also `font-src 'self' data:` so AG Grid's built-in icon font loads under the CSP. Test:
+  `test_design_same_origin_form_posts_pass_and_referrer_keeps_origin` (`Origin: null` still 403).
 
 ## Not done / for the owner
 

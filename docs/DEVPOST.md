@@ -80,12 +80,12 @@ the free Community edition:
 - **Filtering**: text and number column filters, **external filters** wired to the
   *Executed / Rejected* and *Capture / Void / Refund* buttons (and *Pending / Used / Declined*
   on the owner page), and the **quick filter** behind the search box.
-- **Cell renderers**: result and state as readable status chips (`rejected · replay` in red,
-  `executed` in green, `pending` in amber); each hash links to the raw ledger row
-  (`/ledger/entry/<n>`).
+- **Status cells** via `valueGetter` and `cellClass`: result and state read as colored chips
+  (`rejected · replay` in red, `executed` in green, `pending` in amber) while every cell value stays
+  plain text: no cell renderers, no HTML from data (`tests/security` checks it).
 - **Row selection driving a detail panel**: tap or press Enter on a row to see the signed fields
   (jti, action, recipient, cap, expiry, issuer, plan hash) and the chain link (`hash`, `prev`,
-  a link to the previous row). On the owner page it shows the exact canonical bytes the phone signs.
+  links to the raw row `/ledger/entry/<n>` and the previous one). On the owner page it shows the exact canonical bytes the phone signs.
 - **CSV export** of the ledger (`exportDataAsCsv`), the **Theming API** (`themeQuartz.withParams`)
   fed from the page's own color tokens in light and dark mode, 44 px rows, `ensureDomOrder` and
   keyboard navigation. On a phone the grid keeps four columns and the rest moves to the detail.
@@ -114,7 +114,7 @@ the free Community edition:
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
   PayPal sandbox by setting environment variables.
-- 192 automated tests, all offline, including the attacks listed under "Try to break it"
+- 387 automated tests, all offline, including the attacks listed under "Try to break it"
   in the README.
 
 ## What we learned

@@ -1,7 +1,7 @@
 /* Upgrades each [data-grid] table to AG Grid Community 36 (vendored, MIT, no CDN).
    Used features, all Community: sorting (multi-column with shift), column text/number filters,
    external filters (the result / action / state buttons), quick filter (search box),
-   custom cell renderers (status chips, hash links), single-row selection driving a detail panel
+   status cells styled by cellClass (no renderers: values stay text), single-row selection driving a detail panel
    (signed fields, chain link), CSV export, the Theming API fed from app.css tokens, and
    keyboard navigation with DOM order kept for screen readers.
    The plain table stays as the no-JS fallback and is hidden only once the grid exists. */
@@ -27,26 +27,18 @@
     if (text !== undefined) n.textContent = text;
     return n;
   }
-  function chip(tone) {
-    return function (p) {
-      if (!p.value) return '';
-      var s = el('span', {'class': 'chip ' + (p.data.tone || tone || 'neutral')}, p.value);
-      return s;
-    };
-  }
-  function hashLink(p) {
-    if (!p.value) return '';
-    var a = el('a', {href: '/ledger/entry/' + p.data.n, title: 'Raw ledger row ' + p.data.n});
-    a.appendChild(el('code', {}, p.value));
-    return a;
-  }
+  /* No cell renderers: AG Grid writes every cell value as text (tests/security forbids
+     renderers, HTML strings and formatters). Status cells only get a CSS class from the row's
+     server-computed tone, which is one of a fixed set of words. */
+  var TONES = {ok: 1, bad: 1, warn: 1, info: 1, neutral: 1};
+  function toneClass(p) { return 'cell-chip tone-' + (TONES[p.data.tone] ? p.data.tone : 'neutral'); }
   function resultText(p) { return p.data.result + (p.data.reason ? ' · ' + p.data.reason : ''); }
 
   var specs = {
     mandates: {
       columns: [
         {field: 'short', headerName: 'Mandate', minWidth: 100, filter: 'agTextColumnFilter'},
-        {field: 'state', headerName: 'State', minWidth: 110, cellRenderer: chip(), filter: 'agTextColumnFilter'},
+        {field: 'state', headerName: 'State', minWidth: 110, cellClass: toneClass, filter: 'agTextColumnFilter'},
         {field: 'action', headerName: 'Action', minWidth: 140, filter: 'agTextColumnFilter'},
         {field: 'resource', headerName: 'Resource', minWidth: 120, filter: 'agTextColumnFilter', initialHide: true},
         {field: 'cap', headerName: 'Cap (USD)', minWidth: 96, type: 'rightAligned', filter: 'agNumberColumnFilter',
@@ -68,9 +60,9 @@
       columns: [
         {field: 'n', headerName: '#', minWidth: narrow ? 56 : 64, maxWidth: 80, filter: 'agNumberColumnFilter', sort: 'desc'},
         {field: 'time', headerName: 'Time (UTC)', minWidth: 100, initialHide: true},   /* in the row detail */
-        {field: 'result', headerName: 'Result', minWidth: narrow ? 150 : 170, cellRenderer: function (p) {
-           return el('span', {'class': 'chip ' + p.data.tone}, resultText(p)); },
-         getQuickFilterText: resultText, filter: 'agTextColumnFilter'},
+        {colId: 'result', headerName: 'Result', minWidth: narrow ? 150 : 170, valueGetter: resultText,
+         cellClass: toneClass, filter: 'agTextColumnFilter'},
+        {field: 'result', colId: 'result_raw', headerName: 'Result (raw)', hide: true},
         {field: 'reason', headerName: 'Reason', hide: true},          /* shown in the Result chip; exported to CSV */
         {field: 'action', headerName: 'Action', minWidth: narrow ? 130 : 150, filter: 'agTextColumnFilter'},
         {field: 'resource', headerName: 'Resource', minWidth: 120, filter: 'agTextColumnFilter', initialHide: narrow},
@@ -78,7 +70,7 @@
          filterValueGetter: function (p) { return parseFloat(p.data.amount); },
          comparator: function (a, b) { return parseFloat(a || 0) - parseFloat(b || 0); }},
         {field: 'mandate', headerName: 'Mandate', minWidth: 100, filter: 'agTextColumnFilter', initialHide: true},
-        {field: 'hash', headerName: 'Hash', minWidth: 160, cellRenderer: hashLink, filter: 'agTextColumnFilter', initialHide: narrow}
+        {field: 'hash', headerName: 'Hash', minWidth: 160, cellClass: 'cell-mono', filter: 'agTextColumnFilter', initialHide: narrow}   /* link: row detail */
       ],
       id: function (r) { return String(r.n); },
       detail: function (r) {
