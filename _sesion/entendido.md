@@ -65,3 +65,39 @@ d inicial = 7/9 = 0.78
 - Doble HTTP de PayPal existente: tests/paypal/fakepaypal.py (para el adaptador REST); el
   webhook no pasa por el adaptador, así que el doble de certificado es nuevo.
 - docs/video no existe; VIDEO_SCRIPT.md es la fuente del guion (se reutiliza, no se duplica).
+
+## Mediciones intermedias de d
+
+| Después de | d |
+|---|---|
+| webhooks (biblioteca) | 6/9 (criterio 1 pasa: 133) |
+| webhooks (demo) | 5/9 |
+| SQLite | 4/9 |
+| record_demo.py + clips | 3/9 |
+| SHOTLIST + srt + check | 1/9 |
+| JUDGE_REVIEW_N6 + arreglos de la revisión | 0/9 |
+
+Medición final (todos los comandos de la tabla, corridos tras el último commit de código):
+1 `165 passed, 1 deselected`; 2 `{"ok":true}`; 3 `ok`; 4 `OK total 160 s <= 180 s; 9 shots; ...`;
+5 `28 passed`; 6 `16 passed`; 7 `exit 0`; 8 `1`; 9 `0`.
+
+## Telemetría
+
+- d inicial: 7/9 (0.78). d final: 0/9.
+- Commits en la rama: 11 contando este (desde feaaa6c).
+- Intentos fallidos (ninguno de tres seguidos sin bajar d):
+  - persistencia: `restore` reasignaba `engine.pending`/`approved`/`used` y dejaba a `OwnerSide`
+    con referencias viejas (KeyError); arreglado mutando en sitio. Una prueba esperaba una fila de
+    snapshot de una tienda que nunca hizo POST (expectativa mía errónea).
+  - grabación: 3 corridas fallidas: ffmpeg-1013 inexistente con playwright 1.64.1 (instalé 1.63.0,
+    la versión del Node preinstalado); `tr.rejected` oculto porque AG Grid reemplaza la tabla;
+    iframes que no recargaban al poner la misma URL con `#end` (detectado en la imagen fija).
+  - check_video_assets: argumento por defecto ligado en la definición (monkeypatch no surtía efecto).
+  - dos pruebas mal escritas tras la revisión (una afirmación vacía `or True` y un generador de
+    colisiones CRC que no funcionaba); reemplazadas por un verificador doble que acepta todo.
+- Mirada externa: 7 hallazgos, 7 aplicados, 0 rebatidos (detalle en docs/JUDGE_REVIEW_N6.md).
+  Dos puntos menores declarados como no hechos: sin verificación de cadena de certificados; el
+  conjunto de deduplicación en memoria (sin store) crece durante la vida del proceso.
+- Minutos aproximados: 35-40 (reloj del contenedor; sin verificar con precisión).
+- Fuera de alcance por las reglas: corrida en vivo con Claude y con el sandbox de PayPal (llaves del
+  operador); voz y publicación del video.
