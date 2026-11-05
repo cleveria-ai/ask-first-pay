@@ -60,14 +60,20 @@ def test_no_webhook_event_moves_money_even_when_genuine(demo):
     assert demo.pending_ids() == []                       # and nothing was asked of the owner
 
 
-def test_an_expired_authorization_webhook_stops_a_capture_request(demo):
+def test_an_expired_authorization_webhook_is_only_a_note(demo):
+    """A webhook never changes what the agent may ask for; PayPal refuses a dead hold anyway."""
     oid = book(demo)
     demo.client.post(f"/checkout/{oid}/approve")
     s, b = demo.state.front.latest("deposit_held")
     headers, body = demo.state.webhook_sim.event("PAYMENT.AUTHORIZATION.EXPIRED", {"id": b["authorization_id"]})
-    assert demo.client.post("/webhooks/paypal", content=body, headers=headers).json()["outcome"] == "hold_expired"
-    demo.state.front.no_show(s, b["id"])
-    assert demo.pending_ids() == [] and not demo.calls("capture")
+    assert demo.client.post("/webhooks/paypal", content=body, headers=headers).json()["outcome"] == "noted"
+    assert b["status"] == "deposit_held"
+    assert any("was expired" in m.text for m in demo.state.front.messages)
+
+
+def test_an_oversized_webhook_is_refused_before_it_is_read(demo):
+    r = demo.client.post("/webhooks/paypal", content=b"x" * (64 * 1024 + 1))
+    assert r.status_code == 413 and r.json()["reason"] == "too_large"
 
 
 def test_order_approved_for_an_unknown_order_is_accepted_but_does_nothing(demo):

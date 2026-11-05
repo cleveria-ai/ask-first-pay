@@ -59,9 +59,12 @@ def cert_url_allowed(url: str) -> bool:
 
 def _parse_time(value: str) -> float:
     try:
-        return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        t = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as e:
         raise WebhookRejected("bad_header", f"paypal-transmission-time {value!r}") from e
+    if t.tzinfo is None:                     # never guess the server's local time zone
+        raise WebhookRejected("bad_header", f"paypal-transmission-time {value!r} has no time zone")
+    return t.timestamp()
 
 
 def fetch_paypal_cert(url: str) -> bytes:
@@ -85,16 +88,16 @@ class CertVerifier:
     def _public_key(self, url: str):
         if url not in self._certs:
             try:
-                cert = x509.load_pem_x509_certificate(self.fetch_cert(url))
+                self._certs[url] = x509.load_pem_x509_certificate(self.fetch_cert(url))
             except WebhookRejected:
                 raise
             except Exception as e:                        # noqa: BLE001
                 raise WebhookRejected("bad_cert", f"{type(e).__name__}: {e}") from e
-            now = dt.datetime.fromtimestamp(self.clock(), dt.timezone.utc)
-            if not cert.not_valid_before_utc <= now <= cert.not_valid_after_utc:
-                raise WebhookRejected("bad_cert", "certificate outside its validity period")
-            self._certs[url] = cert.public_key()
-        return self._certs[url]
+        cert = self._certs[url]
+        now = dt.datetime.fromtimestamp(self.clock(), dt.timezone.utc)
+        if not cert.not_valid_before_utc <= now <= cert.not_valid_after_utc:   # on every delivery
+            raise WebhookRejected("bad_cert", "certificate outside its validity period")
+        return cert.public_key()
 
     def verify(self, headers: dict, body: bytes) -> None:
         h = {k.lower(): v for k, v in headers.items()}
@@ -187,10 +190,14 @@ class WebhookReceiver:
             raise WebhookRejected("bad_event", "id and event_type are required")
         if not isinstance(ev.get("resource"), dict):
             raise WebhookRejected("bad_event", "resource must be an object")
-        if self.seen(ev["id"]):
+        # PayPal's signature covers only the CRC32 of the body, so one signature could be replayed
+        # on another body with the same CRC32. Each transmission is accepted once, whatever its body.
+        tx = "tx:" + {k.lower(): v for k, v in headers.items()}["paypal-transmission-id"]
+        if self.seen(ev["id"]) or self.seen(tx):
             return {"event_id": ev["id"], "event_type": ev["event_type"], "outcome": "duplicate"}
         handler = self.handlers.get(ev["event_type"])
         outcome = handler(ev["resource"]) if handler else "ignored"
+        self.remember(tx, ev["event_type"], outcome)
         self.remember(ev["id"], ev["event_type"], outcome)
         row = {"event_id": ev["id"], "event_type": ev["event_type"], "outcome": outcome}
         self.log.append(row)

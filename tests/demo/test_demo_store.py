@@ -97,11 +97,31 @@ def test_the_ledger_marks_used_even_if_the_snapshot_was_not_saved(db):
     s, b = a.held_booking()
     a.state.front.no_show(s, b["id"])
     [jti] = a.pending()
-    a.state.approve(jti, sign_envelope(a.priv, a.state.owner.pending[jti]))   # no HTTP: no save
-    stale = SqliteStore(db, "bright-smile").load()
-    assert jti not in stale["engine"]["used"]                # the snapshot predates the capture
+    a.state.persist()
+    before = SqliteStore(db, "bright-smile").load()          # a snapshot from before the capture
+    a.approve(jti)
+    SqliteStore(db, "bright-smile").save(before)             # as if the later saves were lost
     c = Shop(db, key=(a.priv, a.pub))
-    assert jti in c.state.engine.used
+    assert jti in c.state.engine.used                        # the ledger row still marks it used
+    c.client.post("/replay")       # the lost snapshot also lacks the approval: refused before PayPal
+    assert c.state.ledger_rows()[0][0]["reason"] == "not_approved" and c.provider.calls == []
+
+
+def test_the_used_mark_is_saved_before_paypal_is_called(db):
+    a = Shop(db)
+    a.pair()
+    s, b = a.held_booking()
+    a.state.front.no_show(s, b["id"])
+    [jti] = a.pending()
+    seen = {}
+    real = a.provider.capture
+
+    def capture(*args, **kw):                                # the process "dies" during the call
+        seen["used_on_disk"] = jti in SqliteStore(db, "bright-smile").load()["engine"]["used"]
+        return real(*args, **kw)
+    a.provider.capture = capture
+    a.approve(jti)
+    assert seen == {"used_on_disk": True}
 
 
 def test_a_decline_stays_final_across_a_restart(db):
@@ -164,3 +184,21 @@ def test_fake_provider_round_trips_through_its_dict():
     assert q.to_dict() == p.to_dict()
     assert q.capture(a.authorization_id, 10.0, "jti-1").capture_id == "CAP-0003"   # idempotent replay
     assert q.create_order(10.0, "USD", "booking-2").order_id == "ORDER-0004"      # ids continue
+
+
+def test_a_webhook_effect_is_saved_before_its_id_is_marked_seen(db):
+    a = Shop(db)
+    a.client.post("/chat/send", data={"message": "book Mon 16 Nov 09:00"})
+    oid = list(a.provider.orders)[-1]
+    a.provider.approve(oid)
+    status_when_marked = []
+    real = a.state.store.remember_event
+
+    def remember(event_id, event_type, outcome):
+        snap = SqliteStore(db, "bright-smile").load()
+        status_when_marked.append(snap["front"]["conversations"][-1]["bookings"]["booking-1"]["status"])
+        return real(event_id, event_type, outcome)
+    a.state.store.remember_event = remember
+    headers, body = a.state.webhook_sim.event("CHECKOUT.ORDER.APPROVED", {"id": oid})
+    a.client.post("/webhooks/paypal", content=body, headers=headers)
+    assert status_when_marked and set(status_when_marked) == {"deposit_held"}

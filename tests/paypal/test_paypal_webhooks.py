@@ -121,3 +121,42 @@ def test_receiver_rejects_a_signed_body_that_is_not_an_event(sim):
         with pytest.raises(WebhookRejected) as e:
             r.receive(headers, raw)
         assert e.value.reason in ("bad_json", "bad_event")
+
+
+class AcceptsAnything:
+    """Stands in for a forger who found a body with the same CRC32 as a captured delivery: the
+    signature check passes, as it would in PayPal's scheme, which signs only the CRC32."""
+    def verify(self, headers, body):
+        return None
+
+
+def test_one_transmission_signature_is_accepted_once_whatever_the_body(sim):
+    got = []
+    r = WebhookReceiver(AcceptsAnything(), {"PAYMENT.AUTHORIZATION.EXPIRED": lambda res: got.append(res) or "x",
+                                            "PAYMENT.CAPTURE.COMPLETED": lambda res: "noted"})
+    headers, body = sim.event("PAYMENT.CAPTURE.COMPLETED", {"id": "CAP-1"})
+    assert r.receive(headers, body)["outcome"] == "noted"
+    forged = json.dumps({"id": "WH-EVT-NEW", "event_type": "PAYMENT.AUTHORIZATION.EXPIRED",
+                         "resource": {"id": "AUTH-1"}}).encode()
+    assert r.receive(headers, forged)["outcome"] == "duplicate"      # new event id, same transmission
+    assert got == []
+    fresh = {**headers, "paypal-transmission-id": "another"}
+    assert r.receive(fresh, forged)["outcome"] == "x" and len(got) == 1
+
+def test_the_certificate_dates_are_checked_on_every_delivery(sim):
+    now = [NOW]
+    v = CertVerifier(sim.webhook_id, sim.fetch_cert, clock=lambda: now[0], max_age_s=10**9)
+    headers, body = order_approved(sim)
+    v.verify(headers, body)                                     # cached now
+    now[0] = NOW + 60 * 86400
+    with pytest.raises(WebhookRejected) as e:
+        v.verify(headers, body)
+    assert e.value.reason == "bad_cert"
+
+
+def test_a_transmission_time_without_a_zone_is_refused(sim):
+    headers, body = order_approved(sim)
+    headers["paypal-transmission-time"] = headers["paypal-transmission-time"].rstrip("Z")
+    with pytest.raises(WebhookRejected) as e:
+        sim.verifier().verify(headers, body)
+    assert e.value.reason == "bad_header"

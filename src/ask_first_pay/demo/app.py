@@ -20,12 +20,13 @@ from ask_first.canonical import canonical
 from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..fake_provider import FakeProvider
-from ..paypal.webhooks import CertVerifier, WebhookReceiver, WebhookRejected, WebhookSimulator, fetch_paypal_cert
+from ..paypal.webhooks import MAX_BODY, CertVerifier, WebhookReceiver, WebhookRejected, WebhookSimulator, fetch_paypal_cert
 from ..agent.state import AgentState
 from ..agent.tools import SLOTS
 from ..store import SqliteStore
@@ -65,6 +66,16 @@ class DemoState:
         self.webhook_sim, self.webhooks = self._webhooks()
         if store is not None and (snap := store.load()) is not None:
             self.restore(snap)
+        if store is not None:
+            self.engine.executor = self._saved_before(self.engine.executor)
+
+    def _saved_before(self, executor):
+        """The engine marks a mandate used, then calls PayPal. Save that mark first, so a crash
+        during the call cannot leave an approved-but-unused mandate on disk."""
+        def run(mandate, requested):
+            self.persist()
+            return executor(mandate, requested)
+        return run
 
     # ---- optional persistence (ASK_FIRST_DB): see ask_first_pay/store.py
     def snapshot(self) -> dict:
@@ -128,8 +139,12 @@ class DemoState:
                     "PAYMENT.AUTHORIZATION.EXPIRED": self._on_authorization("expired"),
                     "PAYMENT.CAPTURE.COMPLETED": self._note("a capture completed"),
                     "PAYMENT.CAPTURE.REFUNDED": self._note("a refund completed")}
-        dedupe = ({"seen": self.store.seen_event, "remember": self.store.remember_event}
-                  if self.store is not None else {})
+        dedupe = {}
+        if self.store is not None:
+            def remember(event_id, event_type, outcome):
+                self.persist()                 # the handler's effect is saved before "seen":
+                self.store.remember_event(event_id, event_type, outcome)   # a crash means redelivery
+            dedupe = {"seen": self.store.seen_event, "remember": remember}
         if self.simulated:
             sim = WebhookSimulator()
             return sim, WebhookReceiver(sim.verifier(), handlers, **dedupe)
@@ -158,10 +173,10 @@ class DemoState:
             if found is None:
                 return "no booking holds this authorization"
             s, b = found
-            if what == "expired" and b["status"] == "deposit_held":
-                b["status"] = "hold_expired"        # the agent can no longer ask to capture it
+            # A note only: a webhook never changes what the agent may ask for (PayPal itself
+            # refuses a capture on an expired hold).
             self.front.say(f"PayPal webhook: the hold {b['authorization_id']} for {b['id']} was {what}.", who="system")
-            return b["status"]
+            return "noted"
         return handle
 
     def _note(self, what: str):
@@ -333,7 +348,7 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     async def persist_after_writes(request: Request, call_next):
         response = await call_next(request)
         if request.method == "POST":
-            state.persist()                 # a no-op without ASK_FIRST_DB
+            await run_in_threadpool(state.persist)    # a no-op without ASK_FIRST_DB
         return response
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
@@ -382,9 +397,16 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     # ---- PayPal webhooks
     @app.post("/webhooks/paypal")
     async def paypal_webhook(request: Request):
+        try:
+            declared = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            declared = 0
+        if declared > MAX_BODY:
+            return JSONResponse({"ok": False, "reason": "too_large", "detail": f"{declared} bytes"}, status_code=413)
         body = await request.body()
         try:
-            out = state.receive_webhook(dict(request.headers), body)
+            # off the event loop: an approved order runs a whole agent turn (maybe a model call)
+            out = await run_in_threadpool(state.receive_webhook, dict(request.headers), body)
         except WebhookRejected as e:
             code = 503 if e.reason == "not_configured" else 400
             return JSONResponse({"ok": False, "reason": e.reason, "detail": e.detail}, status_code=code)
