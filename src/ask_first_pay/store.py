@@ -27,6 +27,12 @@ CREATE TABLE IF NOT EXISTS snapshots (
   data    TEXT NOT NULL,
   updated REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS used_mandates (
+  shop_id    TEXT NOT NULL,
+  mandate_id TEXT NOT NULL,
+  claimed    REAL NOT NULL,
+  PRIMARY KEY (shop_id, mandate_id)
+);
 CREATE TABLE IF NOT EXISTS webhook_events (
   shop_id    TEXT NOT NULL,
   event_id   TEXT NOT NULL,
@@ -73,6 +79,20 @@ class SqliteStore:
             c.execute("INSERT INTO snapshots (shop_id, data, updated) VALUES (?, ?, ?) "
                       "ON CONFLICT(shop_id) DO UPDATE SET data = excluded.data, updated = excluded.updated",
                       (self.shop_id, data, time.time()))
+
+    def claim_mandate(self, mandate_id: str) -> bool:
+        """Atomically mark a mandate spent in the database itself. True only for the first claimant,
+        whichever process it is: the in-memory `used` set and the snapshot are per process and
+        last-writer-wins, this row is the one shared fact. Claimed BEFORE the provider is called, so a
+        crash afterwards burns the mandate instead of reopening it."""
+        with self._lock, self._connect() as c:
+            cur = c.execute("INSERT OR IGNORE INTO used_mandates VALUES (?, ?, ?)",
+                            (self.shop_id, str(mandate_id), time.time()))
+            return cur.rowcount == 1
+
+    def used_mandates(self) -> set[str]:
+        with self._lock, self._connect() as c:
+            return {r[0] for r in c.execute("SELECT mandate_id FROM used_mandates WHERE shop_id = ?", (self.shop_id,))}
 
     def seen_event(self, event_id: str) -> bool:
         with self._lock, self._connect() as c:

@@ -74,6 +74,10 @@ class AgentGate:
     def request(self, action: str, target: str, amount: float, ttl_s: int = 900, agent: str = "front-desk-agent") -> dict:
         if action not in ACTIONS:
             raise ValueError(f"unknown action {action!r}")
+        # A cap is money: whole cents only. The owner reads it as .2f and the PayPal adapter refuses
+        # sub-cent amounts, so 9.996 would be signed as "10.00" and could never run as signed.
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or round(amount, 2) != amount:
+            raise ValueError(f"amount must be a number of whole cents, got {amount!r}")
         return dict(self._request(agent, action, target, amount, ttl_s=ttl_s))
 
     def execute(self, mandate_id: str, action: str, target: str, amount: float) -> dict:
