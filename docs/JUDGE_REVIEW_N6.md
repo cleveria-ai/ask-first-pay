@@ -10,7 +10,7 @@ live PayPal sandbox: no keys in this session. Those runs are the operator's
 
 | Criterion | Before (N5) | After (N6) | Main evidence |
 |---|---|---|---|
-| Technological Implementation | 7 | 8 | Before: no webhooks, the customer had to say "I paid"; state lost on restart. After: `/webhooks/paypal` verifies PayPal's signed format locally (SHA256withRSA over `transmission_id\|transmission_time\|webhook_id\|crc32(body)`, certificate only from `https://*.paypal.com`, 5-minute window, dedupe by event id), `src/ask_first_pay/paypal/webhooks.py`; the simulated checkout now goes through that path; optional SQLite per shop, `src/ask_first_pay/store.py`, which also rebuilds "used" from the ledger so a restart cannot reopen a replay. Still not run live (weakness 4 of N5 stays open). |
+| Technological Implementation | 7 | 8 | Before: no webhooks, the customer had to say "I paid"; state lost on restart. After: `/webhooks/paypal` verifies PayPal's signed format locally (SHA256withRSA over `transmission_id\|transmission_time\|webhook_id\|crc32(body)`, certificate only from `https://*.paypal.com`, 5-minute window, dedupe by event id and transmission id), `src/ask_first_pay/paypal/webhooks.py`; the simulated checkout now goes through that path; optional SQLite per shop, `src/ask_first_pay/store.py`, which also rebuilds "used" from the ledger so a restart cannot reopen a replay. Still not run live (weakness 4 of N5 stays open). |
 | Design | 7 | 7 | Same three pages. The chat now shows "PayPal webhook: the customer approved the deposit", which makes the hold step legible. No new UI for the webhook log beyond `GET /webhooks/paypal/events`. |
 | Potential Impact | 7 | 7 | Persistence and a `shop_id` key remove "a restart forgets everything", the main blocker to a pilot. Still one shop per process, no owner login, no real WhatsApp channel: not enough to move the score. |
 | Innovation | 7 | 7 | Unchanged idea. Webhook verification is standard practice; the one new twist (a webhook may hold, never move money) is a consequence of the existing design. |
@@ -23,7 +23,7 @@ live PayPal sandbox: no keys in this session. Those runs are the operator's
 $ .venv/bin/python -m pytest -q            # before (n5-judge, this session, start of work)
 116 passed, 1 deselected in 5.50s
 $ .venv/bin/python -m pytest -q            # after
-TESTS_AFTER
+165 passed, 1 deselected in 9.96s
 $ .venv/bin/python scripts/check_video_assets.py
 OK total 160 s <= 180 s; 9 shots; shot list, subtitles and record_demo agree
 $ .venv/bin/python scripts/record_demo.py  # headless Chromium 153, offline demo
@@ -49,10 +49,11 @@ What the new tests pin down (`tests/paypal/test_paypal_webhooks.py`,
 altered body, altered header, wrong algorithm, non-PayPal or non-https cert URL, stale
 timestamp, missing header, another webhook id, a key that is not the certificate's, and an
 expired certificate are all refused; a redelivered event is a duplicate (also after a restart);
-genuine capture/refund/void events move no money and ask the owner nothing; an EXPIRED event
-stops a later capture request; after a restart a pending mandate can still be approved once, a
+genuine capture/refund/void/expired events move no money, ask the owner nothing and change no
+booking (a note only); one transmission id is accepted once even with a different body; after a restart a pending mandate can still be approved once, a
 used one is still `rejected · replay`, a decline is still final, and a capture whose snapshot
-was never saved is still marked used from the ledger.
+was never saved is still marked used from the ledger, and the used mark is on disk before
+PayPal is called.
 
 ## Weaknesses from N5, where they stand
 
@@ -67,3 +68,20 @@ was never saved is still marked used from the ledger.
 
 Unchanged from N5: Honorable mention *Best Use of Agentic Commerce* first; *Best Use of PayPal +
 AI* needs the live runs on video. AG Grid use is still thin.
+
+## External review of this diff (subagent, without the author's reasoning)
+
+Seven findings, all applied (commit "webhooks/store: fixes from the external review"):
+
+| # | Finding | Severity | Done |
+|---|---|---|---|
+| 1 | PayPal signs only `crc32(body)`: a captured signature could be reused on a CRC32-twin body with a new event id; a forged EXPIRED set `hold_expired` and blocked a no-show capture | high | dedupe by `paypal-transmission-id` too; EXPIRED is now a note only |
+| 2 | Event id marked seen before the snapshot was saved: a crash lost the payer approval forever | medium | the snapshot is saved before the id is marked seen |
+| 3 | A crash during the PayPal call left the mandate approved-but-unused on disk | medium | the engine's executor is wrapped to save first (gate.py unchanged) |
+| 4 | Webhook handling and `persist` ran on the event loop | medium | `run_in_threadpool` |
+| 5 | Certificate dates checked only on first fetch | low | checked on every delivery |
+| 6 | Size limit checked after reading the body | low | 413 from `Content-Length` first |
+| 7 | Zone-less transmission time read as local time | low | refused |
+
+Not done (stated, not hidden): no certificate chain check (only the host allow-list and dates);
+the in-memory dedupe set without a store grows for the life of the process.

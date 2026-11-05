@@ -58,7 +58,7 @@ any hour, but they are the only one who decides when a customer's money is actua
   number to approve.
 - **Webhooks:** `/webhooks/paypal` verifies each delivery locally the way PayPal signs it
   (SHA256withRSA over transmission id, time, webhook id and the body's CRC32, certificate only
-  from `*.paypal.com`, 5-minute window, dedupe by event id). A webhook can make the agent hold a
+  from `*.paypal.com`, 5-minute window, each event and each transmission accepted once). A webhook can make the agent hold a
   deposit; it can never capture, void or refund. Offline, a local simulator plays PayPal.
 - **Persistence:** optional SQLite (`ASK_FIRST_DB`), one row per shop, so a restart keeps
   bookings, signed approvals and the set of used mandates (a restart cannot reopen a replay).
@@ -90,7 +90,7 @@ any hour, but they are the only one who decides when a customer's money is actua
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
   PayPal sandbox by setting environment variables.
-- 159 automated tests, all offline, including the attacks listed under "Try to break it"
+- 165 automated tests, all offline, including the attacks listed under "Try to break it"
   in the README.
 
 ## What we learned

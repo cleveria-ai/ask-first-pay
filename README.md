@@ -118,7 +118,8 @@ offline tests with recorded-shape responses; `tests/paypal/test_paypal_live.py` 
 Webhooks (`src/ask_first_pay/paypal/webhooks.py`) are verified locally the way PayPal documents
 it: SHA256withRSA over `transmission_id|transmission_time|webhook_id|crc32(body)`, with the
 certificate from `paypal-cert-url` (https on `*.paypal.com` only), a 5-minute freshness window and
-deduplication by event id. Offline, the certificate comes from the local simulator; against the
+deduplication by event id and by transmission id (PayPal signs only the body's CRC32, so one
+signature is accepted once). Offline, the certificate comes from the local simulator; against the
 sandbox it is downloaded from PayPal (not yet run live).
 
 ## The three stories
