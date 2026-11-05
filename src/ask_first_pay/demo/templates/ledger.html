@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Ledger{% endblock %}
+{% block main %}
+<h1>Ledger</h1>
+<p id="chain-check" class="card {{ 'ok' if v.ok else ('neutral' if v.empty else 'bad') }}" role="status">
+  <strong>Chain check:</strong>
+  {% if v.empty %}no attempts recorded yet, nothing to verify.
+  {% elif v.ok %}intact. {{ v.chained }} of {{ v.total }} rows are chained, none altered, reordered or removed from the middle.
+  {% else %}BROKEN ({{ v.kind }}) at line {{ v.broken_at }}. {{ v.message }}{% endif %}
+</p>
+<p class="hint">Every attempt is here, accepted or rejected. The chain proves continuity; each mandate's signature proves who approved it.</p>
+<div data-grid="ledger" class="grid-wrap">
+  <table class="plain">
+    <caption class="sr">Every attempt to use a mandate, newest first</caption>
+    <thead><tr><th scope="col">#</th><th scope="col">Time (UTC)</th><th scope="col">Result</th><th scope="col">Reason</th><th scope="col">Mandate</th><th scope="col">Action</th><th scope="col">Resource</th><th scope="col">Amount</th><th scope="col">Hash</th></tr></thead>
+    <tbody>{% for r in rows %}<tr class="{{ r.result }}"><td>{{ r.n }}</td><td>{{ r.time }}</td><td>{{ r.result }}</td><td>{{ r.reason }}</td><td>{{ r.mandate }}</td><td>{{ r.action }}</td><td>{{ r.resource }}</td><td>{{ r.amount }}</td><td><code>{{ r.hash }}</code></td></tr>
+    {% else %}<tr><td colspan="9">No attempts yet.</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+<script type="application/json" id="ledger-data">{{ rows | tojson }}</script>
+<form method="post" action="/replay"><button class="btn secondary" type="submit">Agent tries to replay the last mandate</button></form>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/ag-grid-community.min.js"></script>
+<script src="/static/grid.js"></script>
+{% endblock %}

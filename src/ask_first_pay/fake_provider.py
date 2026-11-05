@@ -6,8 +6,8 @@ any capture, refunds only on captured money, and idempotency by `request_id`.
 """
 from __future__ import annotations
 
-import itertools
 import time
+from dataclasses import asdict
 
 from .ports import Authorization, Capture, Order, ProviderError, Refund
 
@@ -19,7 +19,7 @@ EXPIRY_S = 29 * DAY
 class FakeProvider:
     def __init__(self, clock=time.time) -> None:
         self.clock = clock
-        self._ids = itertools.count(1)
+        self._next_id = 1
         self.orders: dict[str, Order] = {}
         self.auths: dict[str, Authorization] = {}
         self.auth_born: dict[str, float] = {}       # authorization_id -> when its honor period started
@@ -30,7 +30,8 @@ class FakeProvider:
         self._done: dict[str, object] = {}          # request_id -> result (idempotency)
 
     def _id(self, prefix: str) -> str:
-        return f"{prefix}-{next(self._ids):04d}"
+        n, self._next_id = self._next_id, self._next_id + 1
+        return f"{prefix}-{n:04d}"
 
     def _replay(self, request_id: str):
         return self._done.get(request_id)
@@ -139,3 +140,27 @@ class FakeProvider:
         v = self._set_auth(a, "VOIDED")
         self._done[request_id] = v
         return v
+
+    # ---- persistence (the demo's optional SQLite store) -----------------------------------
+    _KINDS = {"Order": Order, "Authorization": Authorization, "Capture": Capture, "Refund": Refund}
+
+    def to_dict(self) -> dict:
+        """Everything a restart needs, as JSON-friendly data (not the `calls` spy list)."""
+        box = lambda v: {"kind": type(v).__name__, **asdict(v)}                     # noqa: E731
+        return {"next_id": self._next_id,
+                "orders": {k: asdict(v) for k, v in self.orders.items()},
+                "auths": {k: asdict(v) for k, v in self.auths.items()},
+                "auth_born": dict(self.auth_born), "auth_root": dict(self.auth_root),
+                "captures": {k: asdict(v) for k, v in self.captures.items()},
+                "refunds": {k: asdict(v) for k, v in self.refunds.items()},
+                "done": {k: box(v) for k, v in self._done.items()}}
+
+    def load_dict(self, d: dict) -> None:
+        self._next_id = int(d["next_id"])
+        self.orders = {k: Order(**v) for k, v in d["orders"].items()}
+        self.auths = {k: Authorization(**v) for k, v in d["auths"].items()}
+        self.auth_born, self.auth_root = dict(d["auth_born"]), dict(d["auth_root"])
+        self.captures = {k: Capture(**v) for k, v in d["captures"].items()}
+        self.refunds = {k: Refund(**v) for k, v in d["refunds"].items()}
+        self._done = {k: self._KINDS[v.pop("kind")](**v) for k, v in
+                      ((k, dict(v)) for k, v in d["done"].items())}

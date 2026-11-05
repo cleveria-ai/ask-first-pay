@@ -23,15 +23,14 @@ from dataclasses import asdict
 
 from ask_first import Ledger, MandateEngine
 
-from .ports import PaymentProvider
+from .ports import PaymentProvider, ProviderError
 
 ACTIONS = ("capture_deposit", "void_deposit", "refund_deposit")
+TRANSIENT_RETRIES = 2      # a timeout or 5xx is retried with the SAME PayPal-Request-Id
 
 
-def make_executor(provider: PaymentProvider):
-    def executor(mandate: dict, requested: dict):
-        action, target, amount = requested["action"], requested["recipient"], requested["amount"]
-        request_id = mandate["jti"]
+def make_executor(provider: PaymentProvider, retries: int = TRANSIENT_RETRIES):
+    def call(action, target, amount, request_id):
         if action == "capture_deposit":
             return asdict(provider.capture(target, amount, request_id=request_id))
         if action == "void_deposit":
@@ -39,6 +38,18 @@ def make_executor(provider: PaymentProvider):
         if action == "refund_deposit":
             return asdict(provider.refund(target, amount, request_id=request_id))
         raise ValueError(f"unknown action {action!r}")
+
+    def executor(mandate: dict, requested: dict):
+        # After a timeout the money may or may not have moved. Retrying with the mandate's jti as
+        # the idempotency key makes PayPal answer the first result instead of moving it twice, so
+        # one approval survives a flaky network and still means exactly one capture.
+        action, target, amount = requested["action"], requested["recipient"], requested["amount"]
+        for attempt in range(retries + 1):
+            try:
+                return call(action, target, amount, mandate["jti"])
+            except ProviderError as e:
+                if not e.transient or attempt == retries:
+                    raise
     return executor
 
 

@@ -1,0 +1,4 @@
+{"id":"5O190127TN364715T","status":"COMPLETED","intent":"AUTHORIZE",
+ "purchase_units":[{"reference_id":"booking-42","payments":{"authorizations":[
+  {"id":"3C679366HH908993F","status":"CREATED","amount":{"currency_code":"USD","value":"10.00"},
+   "expiration_time":"2026-12-01T00:00:00Z"}]}}]}
