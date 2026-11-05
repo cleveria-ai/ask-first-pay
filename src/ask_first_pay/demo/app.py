@@ -10,6 +10,7 @@ import os
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from dataclasses import asdict
@@ -21,7 +22,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -31,6 +32,7 @@ from ..agent.state import AgentState
 from ..agent.tools import SLOTS
 from ..store import SqliteStore
 from ..gate import AgentGate, HoldDesk, OwnerSide, make_engine
+from . import happened
 from .front import BUSINESS, GOODWILL_REFUND, SLOT_LABELS, AgentFrontDesk, Message
 
 HERE = Path(__file__).parent
@@ -40,6 +42,9 @@ PAIRING_TTL_S = 3600
 HEADLINES = {"capture_deposit": "Keep up to ${cap} of the held deposit (no-show)",
              "void_deposit": "Release the held deposit; nothing is charged (cancellation)",
              "refund_deposit": "Give back up to ${cap} of the captured deposit (goodwill)"}
+STATE_TONE = {"pending": "warn", "approved": "info", "used": "ok", "declined": "bad", "expired": "neutral"}
+SIGNED_FIELDS = ("jti", "iss", "sub", "action", "recipient", "cap", "created", "exp", "plan_hash")
+SCENARIO_LABELS = {"no_show": "no-show", "cancel": "cancellation", "goodwill": "no-show with goodwill refund"}
 
 
 class DemoState:
@@ -63,6 +68,7 @@ class DemoState:
         self.declined: set[str] = set()
         self.scenario_used: set[str] = set()   # held bookings a scenario already acted on
         self.lock = threading.RLock()
+        self.last: dict | None = None          # the "what just happened" line (demo/happened.py)
         self.webhook_sim, self.webhooks = self._webhooks()
         # The head of the ledger, remembered OUTSIDE the ledger file: the only way a hash chain can
         # reveal rows cut off its end (or a whole chain recomputed by someone with file access).
@@ -96,6 +102,18 @@ class DemoState:
             self.persist()
             return executor(mandate, requested)
         return run
+
+    @contextmanager
+    def action(self, label: str):
+        """Run one user action and record what it changed for the "what just happened" line.
+        The caller may change `box["label"]` once it knows the outcome."""
+        with self.lock:
+            before = happened.mark(self)
+            box = {"label": label}
+            try:
+                yield box
+            finally:
+                self.last = happened.describe(self, box["label"], before)
 
     # ---- optional persistence (ASK_FIRST_DB): see ask_first_pay/store.py
     def snapshot(self) -> dict:
@@ -278,6 +296,7 @@ class DemoState:
     def mandate_rows(self) -> list[dict]:
         """Every mandate the agent asked for, with the owner-facing text built from signed fields."""
         rows = []
+        entries = self.agent.view_ledger()["entries"]
         for jti in list(self.owner.pending):
             m = self.owner.get(jti)
             if m is None:
@@ -288,7 +307,11 @@ class DemoState:
                          "resource": m["recipient"], "cap": f"{m['cap']:.2f}", "exp": m["exp"],
                          "exp_text": time.strftime("%H:%M:%S UTC", time.gmtime(m["exp"])),
                          "description": self.agent.describe(jti),
-                         "canonical": canonical(self.owner.pending[jti]).decode("utf-8")})
+                         "canonical": canonical(self.owner.pending[jti]).decode("utf-8"),
+                         "tone": STATE_TONE.get(state, "neutral"),
+                         "created_text": time.strftime("%H:%M:%S UTC", time.gmtime(m["created"])),
+                         "plan_hash": m.get("plan_hash", ""),
+                         "ledger": [e.get("n") for e in entries if e.get("mandate_id") == jti]})
         return rows
 
     def approve(self, mandate_id: str, signature: str) -> None:
@@ -328,7 +351,13 @@ class DemoState:
                          "action": e.get("action") or m.get("action", ""),
                          "resource": e.get("recipient") or m.get("recipient", ""),
                          "amount": f"{amount:.2f}" if amount is not None else "",
-                         "hash": e.get("hash", "")})
+                         "hash": e.get("hash", ""),
+                         # for the row detail: the full ids, the chain link and the signed fields
+                         "mandate_id": str(e.get("mandate_id", "")), "prev": e.get("prev", ""),
+                         "plan_hash": e.get("plan_hash", ""),
+                         "ts_iso": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(e.get("ts", 0))),
+                         "tone": "ok" if e.get("result") == "executed" else "bad",
+                         "signed": {k: m[k] for k in SIGNED_FIELDS if k in m}})
         v = dict(led["verification"])
         head = self.ledger_head
         if v["ok"] and head:
@@ -393,17 +422,23 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
         response = await call_next(request)
         response.headers["X-Frame-Options"] = "DENY"            # the one-tap Approve button must not be framed
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        # same-origin, not no-referrer: under no-referrer Chromium sends `Origin: null` on our own
+        # form POSTs, and the CSRF check above would refuse every button on the page.
+        response.headers["Referrer-Policy"] = "same-origin"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
             "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
         return response
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
 
     def page(request: Request, name: str, **ctx):
-        base = {"business": BUSINESS, "state": state, "simulated": state.simulated}
+        base = {"business": BUSINESS, "state": state, "simulated": state.simulated, "last": state.last}
         return templates.TemplateResponse(request, name, {**base, **ctx})
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        return Response(status_code=204)                # no icon file, and no 404 in the console
 
     @app.get("/healthz")
     def healthz():
@@ -425,8 +460,9 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
         # urlencoded form needs nothing more.
         fields = parse_qs((await request.body()).decode("utf-8", "replace"))
         message = (fields.get("message") or [""])[0][:500]
-        with state.lock:
-            state.front.handle(message)
+        if message.strip():
+            with state.action(f'You sent "{message.strip()[:80]}"'):
+                state.front.handle(message)
         return RedirectResponse("/chat#end", status_code=303)
 
     @app.get("/checkout/{order_id}", response_class=HTMLResponse)
@@ -439,7 +475,8 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     @app.post("/checkout/{order_id}/approve")
     def checkout_approve(order_id: str):
         if state.simulated and order_id in state.provider.orders:
-            state.payer_approved_on_checkout(order_id)
+            with state.action("The customer approved the hold on the simulated PayPal checkout"):
+                state.payer_approved_on_checkout(order_id)
         return RedirectResponse("/chat#end", status_code=303)
 
     # ---- PayPal webhooks
@@ -468,14 +505,20 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     # ---- scenarios
     @app.post("/scenario/{kind}")
     def scenario(kind: str):
-        ok = state.scenario(kind)
+        if kind not in SCENARIO_LABELS:
+            return RedirectResponse("/chat#end", status_code=303)
+        with state.action(f"Scenario: {SCENARIO_LABELS[kind]}") as box:
+            ok = state.scenario(kind)
+            if not ok:
+                box["label"] += " could not start (no held deposit to act on)"
         return RedirectResponse("/owner" if ok else "/chat#end", status_code=303)
 
     @app.post("/replay")
     def replay():
-        with state.lock:
-            state.front.replay_last()
-        return RedirectResponse("/ledger", status_code=303)
+        with state.action("The agent tried to use the last executed mandate again") as box:
+            if not state.front.replay_last():
+                box["label"] = "Replay: nothing was executed yet, so there is nothing to replay"
+        return RedirectResponse("/ledger#latest", status_code=303)
 
     # ---- owner phone
     @app.get("/owner", response_class=HTMLResponse)
@@ -492,9 +535,13 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     async def owner_pair(request: Request):
         body = await _json(request)
         try:
-            with state.lock:
-                state.paired_key = state.owner.pair(str(body.get("code", "")).strip(),
-                                                    str(body.get("public_key", "")))
+            with state.action("This phone was paired with the shop") as box:
+                try:
+                    state.paired_key = state.owner.pair(str(body.get("code", "")).strip(),
+                                                        str(body.get("public_key", "")))
+                except MandateRejected as e:
+                    box["label"] = f"Pairing refused: {e.reason}"
+                    raise
         except MandateRejected as e:
             return JSONResponse({"ok": False, "reason": e.reason, "detail": e.detail}, status_code=400)
         return {"ok": True, "public_key": state.paired_key}
@@ -502,8 +549,14 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     @app.post("/owner/approve")
     async def owner_approve(request: Request):
         body = await _json(request)
+        mid = str(body.get("mandate_id", ""))
         try:
-            state.approve(str(body.get("mandate_id", "")), str(body.get("signature", "")))
+            with state.action(f"The owner approved mandate {mid[:8]} on their phone") as box:
+                try:
+                    state.approve(mid, str(body.get("signature", "")))
+                except MandateRejected as e:
+                    box["label"] = f"The owner's approval of {mid[:8]} was refused: {e.reason}"
+                    raise
         except MandateRejected as e:
             return JSONResponse({"ok": False, "reason": e.reason, "detail": e.detail}, status_code=400)
         return {"ok": True}
@@ -511,7 +564,11 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     @app.post("/owner/decline")
     async def owner_decline(request: Request):
         body = await _json(request)
-        ok = state.decline(str(body.get("mandate_id", "")))
+        mid = str(body.get("mandate_id", ""))
+        with state.action(f"The owner declined mandate {mid[:8]}") as box:
+            ok = state.decline(mid)
+            if not ok:
+                box["label"] = f"Decline of {mid[:8]} refused: it is not waiting for the owner"
         return JSONResponse({"ok": ok}, status_code=200 if ok else 400)
 
     # ---- ledger
@@ -519,5 +576,13 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     def ledger(request: Request):
         rows, verification = state.ledger_rows()
         return page(request, "ledger.html", nav="ledger", rows=rows, v=verification)
+
+    @app.get("/ledger/entry/{n}")
+    def ledger_entry(n: int):
+        """One raw ledger row as written (with `hash` and `prev`), so anyone can check the link."""
+        for e in state.agent.view_ledger()["entries"]:
+            if e.get("n") == n:
+                return {"entry": e, "prev_url": f"/ledger/entry/{n - 1}" if e.get("prev") else None}
+        return JSONResponse({"ok": False, "reason": "no_such_entry"}, status_code=404)
 
     return app

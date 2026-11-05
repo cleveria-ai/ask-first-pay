@@ -36,22 +36,22 @@
   var form = $('#pair-form');
   if (form) form.addEventListener('submit', async function (e) {
     e.preventDefault();
-    msg.textContent = '';
+    msg.textContent = ''; msg.className = 'result';
     try {
       if (!supported()) throw new Error('This browser has no Ed25519 WebCrypto. Use a recent Chrome, Edge, Safari or Firefox.');
       var k = await getKey() || await makeKey();
       var r = await post('/owner/pair', {code: $('#code').value, public_key: k.pub});
       if (!r.ok) throw new Error('Pairing refused: ' + r.reason + '. ' + (r.detail || ''));
-      msg.textContent = 'Paired. This phone can now approve mandates.';
+      msg.textContent = 'Paired. This phone can now approve mandates.'; msg.className = 'result ok';
       location.reload();
-    } catch (err) { msg.textContent = String(err.message || err); }
+    } catch (err) { msg.textContent = String(err.message || err); msg.className = 'result bad'; }
   });
 
   document.querySelectorAll('.mandate').forEach(function (li) {
     var out = $('.result', li);
     function busy(b) { li.querySelectorAll('button').forEach(function (x) { x.disabled = b; }); }
     $('.approve', li).addEventListener('click', async function () {
-      busy(true); out.textContent = '';
+      busy(true); out.textContent = 'Signing on this phone…'; out.className = 'result';
       try {
         if (!supported()) throw new Error('No Ed25519 WebCrypto in this browser.');
         var k = await getKey();
@@ -63,13 +63,13 @@
         var sig = hex(await crypto.subtle.sign({name: 'Ed25519'}, k.priv, new TextEncoder().encode(canon)));
         var r = await post('/owner/approve', {mandate_id: li.getAttribute('data-id'), signature: sig});
         if (!r.ok) throw new Error('Rejected: ' + r.reason + '. ' + (r.detail || ''));
-        out.textContent = 'Approved and executed.'; setTimeout(function () { location.reload(); }, 500);
-      } catch (err) { out.textContent = String(err.message || err); busy(false); }
+        out.textContent = 'Approved and executed.'; out.className = 'result ok'; setTimeout(function () { location.reload(); }, 500);
+      } catch (err) { out.textContent = String(err.message || err); out.className = 'result bad'; busy(false); }
     });
     $('.decline', li).addEventListener('click', async function () {
       busy(true);
       var r = await post('/owner/decline', {mandate_id: li.getAttribute('data-id')});
-      out.textContent = r.ok ? 'Declined.' : 'Could not decline.';
+      out.textContent = r.ok ? 'Declined. A decline is final.' : 'Could not decline.'; out.className = 'result ' + (r.ok ? 'ok' : 'bad');
       setTimeout(function () { location.reload(); }, 500);
     });
   });

@@ -1,29 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Owner{% endblock %}
+{% block bodyclass %}wide{% endblock %}
 {% block main %}
-<h1>Owner approvals</h1>
-<p id="device-status" class="card" data-paired="{{ 'yes' if paired else 'no' }}" role="status">
-  {% if paired %}A phone is paired (key {{ paired[:12] }}…).{% else %}No phone is paired yet.{% endif %}
+<div class="page-head">
+  <h1>Owner approvals</h1>
+  <p>Your phone. Nothing the agent asks for moves money until you tap Approve here.</p>
+</div>
+<p id="device-status" class="card {{ 'ok' if paired else 'neutral' }}" data-paired="{{ 'yes' if paired else 'no' }}" role="status">
+  {% if paired %}<span class="chip ok">Paired</span> This phone signs approvals with key <code>{{ paired[:12] }}…</code> (Ed25519, never leaves the browser).
+  {% else %}<span class="chip warn">Not paired</span> No phone is paired yet: nobody can approve anything.{% endif %}
 </p>
 
 {% if not paired %}
-<section aria-labelledby="pair-h" id="pair-section">
-  <h2 id="pair-h">Pair this phone</h2>
+<section aria-labelledby="pair-h" id="pair-section" class="card">
+  <h2 id="pair-h" style="margin-top:0">Pair this phone</h2>
   <p>Enter the one-time code printed in the terminal. This browser creates an Ed25519 key that never leaves it.</p>
   <form id="pair-form" class="composer">
     <label for="code">Pairing code</label>
     <input id="code" name="code" type="text" autocomplete="off" inputmode="text" required>
     <button class="btn" type="submit">Pair</button>
   </form>
-  <p id="pair-msg" role="status"></p>
+  <p id="pair-msg" class="result" role="status"></p>
 </section>
 {% endif %}
 
+<div class="split">
 <section aria-labelledby="pending-h">
-  <h2 id="pending-h">Waiting for you ({{ pending|length }})</h2>
+  <h2 id="pending-h">Waiting for you <span class="count">{{ pending|length }}</span><span class="sr"> ({{ pending|length }})</span></h2>
   <ul class="pending-list" id="pending-list">
   {% for r in pending %}
     <li class="card mandate" data-id="{{ r.id }}" data-canonical="{{ r.canonical }}">
+      <span class="chip warn">Waiting · single use</span>
       <p class="headline"><strong>{{ r.headline }}</strong></p>
       <p class="what"><code>{{ r.action }}</code> on <code>{{ r.resource }}</code></p>
       <dl>
@@ -35,28 +42,45 @@
       <p class="hint">{{ r.description }}</p>
       <div class="row">
         <button class="btn approve" type="button">Approve</button>
-        <button class="btn secondary decline" type="button">Decline</button>
+        <button class="btn danger decline" type="button">Decline</button>
       </div>
       <p class="result" role="status"></p>
     </li>
   {% else %}
-    <li class="empty">Nothing is waiting. Press a <a href="/">scenario</a> to make the agent ask.</li>
+    <li class="empty"><strong>Nothing is waiting.</strong>The agent has not asked for anything. Press a scenario to make it ask.
+      <br><a class="btn secondary" href="/chat">Go to the chat</a></li>
   {% endfor %}
   </ul>
 </section>
 
 <section aria-labelledby="all-h">
   <h2 id="all-h">All mandates</h2>
+  {% if rows %}
+  <div class="toolbar" data-toolbar="mandates" hidden>
+    <div class="seg" role="group" aria-label="Filter by state" data-filter="state">
+      <button type="button" aria-pressed="true" data-value="">All</button>
+      <button type="button" aria-pressed="false" data-value="pending">Pending</button>
+      <button type="button" aria-pressed="false" data-value="used">Used</button>
+      <button type="button" aria-pressed="false" data-value="declined">Declined</button>
+    </div>
+    <label class="sr" for="mandates-search">Search mandates</label>
+    <input type="search" id="mandates-search" data-search placeholder="Search mandates">
+  </div>
   <div data-grid="mandates" class="grid-wrap">
     <table class="plain">
       <caption class="sr">Every mandate the agent has asked for</caption>
       <thead><tr><th scope="col">Mandate</th><th scope="col">State</th><th scope="col">Action</th><th scope="col">Resource</th><th scope="col">Cap</th><th scope="col">Expires</th></tr></thead>
-      <tbody>{% for r in rows %}<tr><td>{{ r.short }}</td><td>{{ r.state }}</td><td>{{ r.action }}</td><td>{{ r.resource }}</td><td>{{ r.cap }}</td><td>{{ r.exp_text }}</td></tr>
-      {% else %}<tr><td colspan="6">No mandates yet.</td></tr>{% endfor %}</tbody>
+      <tbody>{% for r in rows %}<tr><td>{{ r.short }}</td><td><span class="chip {{ r.tone }}">{{ r.state }}</span></td><td>{{ r.action }}</td><td>{{ r.resource }}</td><td>{{ r.cap }}</td><td>{{ r.exp_text }}</td></tr>{% endfor %}</tbody>
     </table>
   </div>
+  {% else %}
+  <div class="empty"><strong>No mandates yet.</strong>Every request the agent makes is listed here, with its state.</div>
+  {% endif %}
+  <div class="card detail" id="mandates-detail" hidden aria-live="polite"></div>
+  <p class="built">Table: AG Grid Community (vendored, MIT). Tap a row for its signed fields.</p>
   <script type="application/json" id="mandates-data">{{ rows | tojson }}</script>
 </section>
+</div>
 {% endblock %}
 {% block scripts %}
 <script src="/static/vendor/ag-grid-community.min.js"></script>
