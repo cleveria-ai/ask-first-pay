@@ -6,7 +6,7 @@
   <h1>Owner approvals</h1>
   <p>Your phone. Nothing the agent asks for moves money until you tap Approve here.</p>
 </div>
-<p id="device-status" class="card {{ 'ok' if paired else 'neutral' }} status-line" data-paired="{{ 'yes' if paired else 'no' }}" role="status">
+<p id="device-status" class="card {{ 'ok' if paired else 'neutral' }}" data-paired="{{ 'yes' if paired else 'no' }}" role="status">
   {% if paired %}<span class="chip ok">Paired</span> This phone signs approvals with key <code>{{ paired[:12] }}…</code> (Ed25519, never leaves the browser).
   {% else %}<span class="chip warn">Not paired</span> No phone is paired yet: nobody can approve anything.{% endif %}
 </p>

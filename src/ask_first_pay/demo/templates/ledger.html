@@ -32,6 +32,7 @@
   <button type="button" class="btn secondary" data-csv>Download CSV</button>
 </div>
 {% endif %}
+<div class="ledger-layout{{ ' has-detail' if rows }}">
 {% if rows %}
 <div data-grid="ledger" class="grid-wrap">
   <table class="plain">
@@ -45,6 +46,7 @@
   Run a scenario and approve it on the owner's phone.<br><a class="btn secondary" href="/chat">Go to the chat</a></div>
 {% endif %}
 <div class="card detail" id="ledger-detail" hidden aria-live="polite"></div>
+</div>
 <p class="built">Table: AG Grid Community (vendored, MIT): sort any column, filter by result or action, search, export CSV, tap a row for its signed fields.</p>
 <script type="application/json" id="ledger-data">{{ rows | tojson }}</script>
 <h2>Try to break it</h2>

@@ -45,14 +45,14 @@
   var specs = {
     mandates: {
       columns: [
-        {field: 'short', headerName: 'Mandate', minWidth: 110, filter: 'agTextColumnFilter'},
-        {field: 'state', headerName: 'State', minWidth: 120, cellRenderer: chip(), filter: 'agTextColumnFilter'},
-        {field: 'action', headerName: 'Action', minWidth: 150, filter: 'agTextColumnFilter'},
-        {field: 'resource', headerName: 'Resource', minWidth: 120, filter: 'agTextColumnFilter', initialHide: narrow},
-        {field: 'cap', headerName: 'Cap (USD)', minWidth: 100, type: 'rightAligned', filter: 'agNumberColumnFilter',
+        {field: 'short', headerName: 'Mandate', minWidth: 100, filter: 'agTextColumnFilter'},
+        {field: 'state', headerName: 'State', minWidth: 110, cellRenderer: chip(), filter: 'agTextColumnFilter'},
+        {field: 'action', headerName: 'Action', minWidth: 140, filter: 'agTextColumnFilter'},
+        {field: 'resource', headerName: 'Resource', minWidth: 120, filter: 'agTextColumnFilter', initialHide: true},
+        {field: 'cap', headerName: 'Cap (USD)', minWidth: 96, type: 'rightAligned', filter: 'agNumberColumnFilter',
          filterValueGetter: function (p) { return parseFloat(p.data.cap); },
          comparator: function (a, b) { return parseFloat(a) - parseFloat(b); }},
-        {field: 'exp_text', headerName: 'Expires', minWidth: 120, initialHide: narrow}
+        {field: 'exp_text', headerName: 'Expires', minWidth: 120, initialHide: true}
       ],
       id: function (r) { return r.id; },
       detail: function (r) {
@@ -66,17 +66,17 @@
     },
     ledger: {
       columns: [
-        {field: 'n', headerName: '#', minWidth: 64, maxWidth: 80, filter: 'agNumberColumnFilter', sort: 'desc'},
-        {field: 'time', headerName: 'Time (UTC)', minWidth: 110, initialHide: narrow},
-        {field: 'result', headerName: 'Result', minWidth: 170, cellRenderer: function (p) {
+        {field: 'n', headerName: '#', minWidth: narrow ? 56 : 64, maxWidth: 80, filter: 'agNumberColumnFilter', sort: 'desc'},
+        {field: 'time', headerName: 'Time (UTC)', minWidth: 100, initialHide: true},   /* in the row detail */
+        {field: 'result', headerName: 'Result', minWidth: narrow ? 150 : 170, cellRenderer: function (p) {
            return el('span', {'class': 'chip ' + p.data.tone}, resultText(p)); },
          getQuickFilterText: resultText, filter: 'agTextColumnFilter'},
-        {field: 'action', headerName: 'Action', minWidth: 150, filter: 'agTextColumnFilter'},
+        {field: 'action', headerName: 'Action', minWidth: narrow ? 130 : 150, filter: 'agTextColumnFilter'},
         {field: 'resource', headerName: 'Resource', minWidth: 120, filter: 'agTextColumnFilter', initialHide: narrow},
-        {field: 'amount', headerName: 'Amount', minWidth: 96, type: 'rightAligned', filter: 'agNumberColumnFilter',
+        {field: 'amount', headerName: 'Amount', minWidth: narrow ? 84 : 96, type: 'rightAligned', filter: 'agNumberColumnFilter',
          filterValueGetter: function (p) { return parseFloat(p.data.amount); },
          comparator: function (a, b) { return parseFloat(a || 0) - parseFloat(b || 0); }},
-        {field: 'mandate', headerName: 'Mandate', minWidth: 100, filter: 'agTextColumnFilter', initialHide: narrow},
+        {field: 'mandate', headerName: 'Mandate', minWidth: 100, filter: 'agTextColumnFilter', initialHide: true},
         {field: 'hash', headerName: 'Hash', minWidth: 160, cellRenderer: hashLink, filter: 'agTextColumnFilter', initialHide: narrow}
       ],
       id: function (r) { return String(r.n); },
@@ -125,7 +125,8 @@
     wrap.appendChild(host);
     var api = agGrid.createGrid(host, {
       theme: theme(), columnDefs: spec.columns, rowData: rows, domLayout: 'autoHeight',
-      defaultColDef: {sortable: true, resizable: true, flex: 1, filter: false},
+      /* on a phone the filter buttons above the grid replace the header filter icons */
+      defaultColDef: {sortable: true, resizable: true, flex: 1, filter: false, suppressHeaderFilterButton: narrow},
       getRowId: function (p) { return spec.id(p.data); },
       rowSelection: {mode: 'singleRow', checkboxes: false, enableClickSelection: true},
       ensureDomOrder: true, animateRows: true, suppressDragLeaveHidesColumns: true,
@@ -164,8 +165,8 @@
       });
     }
 
-    /* "#latest" (after a replay) or "#n=3": open that row, so the newest attempt is explained */
-    var want = location.hash === '#latest' ? String(rows[0] && spec.id(rows[0])) : (location.hash.match(/^#n=(\d+)$/) || [])[1];
+    /* the ledger opens on its newest row (the attempt that just happened); "#n=3" opens row 3 */
+    var want = (location.hash.match(/^#n=(\d+)$/) || [])[1] || (name === 'ledger' || location.hash === '#latest' ? spec.id(rows[0]) : null);
     if (want) { var node = api.getRowNode(want); if (node) node.setSelected(true); }
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {

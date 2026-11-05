@@ -4,6 +4,10 @@
 (function () {
   var list = document.querySelector('.chat');
   if (!list) return;
-  list.scrollTop = list.scrollHeight;
-  if (location.hash === '#end') { window.scrollTo(0, 0); }
+  function settle() {
+    list.scrollTop = list.scrollHeight;
+    if (location.hash === '#end') { window.scrollTo(0, 0); }
+  }
+  settle();
+  window.addEventListener('load', function () { setTimeout(settle, 0); });
 })();

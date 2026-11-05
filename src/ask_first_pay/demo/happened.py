@@ -29,7 +29,8 @@ def mark(demo) -> dict:
     for i, s in enumerate(demo.front.conversations):
         for bid, b in s.bookings.items():
             bookings[(i, bid)] = (b["slot"], b["status"])
-    return {"ledger": len(demo.agent.view_ledger()["entries"]), "mandates": mandates, "bookings": bookings}
+    return {"ledger": len(demo.agent.view_ledger()["entries"]), "mandates": mandates, "bookings": bookings,
+            "paired": demo.paired_key}
 
 
 def _money(x) -> str:
@@ -74,6 +75,9 @@ def describe(demo, label: str, before: dict) -> dict:
             items.append(f"{slot_label(slot)}: {STATUS_TEXT.get(status, status)}.")
             if status == "deposit_held":
                 tones.add("ok")
+    if after["paired"] != before["paired"] and after["paired"]:
+        items.append(f"Phone key {after['paired'][:12]}… is now the only key that can approve a mandate.")
+        tones.add("ok")
     if not items:
         items.append("No booking, mandate or ledger row changed. No money moved.")
     tone = "bad" if "bad" in tones else "warn" if "warn" in tones else "ok" if "ok" in tones else "info"
