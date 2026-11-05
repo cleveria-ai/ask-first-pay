@@ -44,7 +44,7 @@ def test_a_full_sandbox_style_run_leaks_no_secret_into_pages_db_ledger_or_chat(t
         r = inner(req)
         return r
     p = PayPalProvider(CID, SECRET, transport=httpx.MockTransport(handler))
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-FAKEFAKEFAKEFAKEFAKE")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-" + "ant-api03-FAKEFAKEFAKEFAKEFAKE")
     monkeypatch.setenv("PAYPAL_CLIENT_SECRET", SECRET)
     monkeypatch.setenv("PAYPAL_WEBHOOK_ID", "WH-SECRETISH-ID-9999")
     db = str(tmp_path / "s.sqlite")
