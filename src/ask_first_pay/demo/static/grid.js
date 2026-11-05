@@ -71,6 +71,7 @@
         {field: 'result', headerName: 'Result', minWidth: narrow ? 150 : 170, cellRenderer: function (p) {
            return el('span', {'class': 'chip ' + p.data.tone}, resultText(p)); },
          getQuickFilterText: resultText, filter: 'agTextColumnFilter'},
+        {field: 'reason', headerName: 'Reason', hide: true},          /* shown in the Result chip; exported to CSV */
         {field: 'action', headerName: 'Action', minWidth: narrow ? 130 : 150, filter: 'agTextColumnFilter'},
         {field: 'resource', headerName: 'Resource', minWidth: 120, filter: 'agTextColumnFilter', initialHide: narrow},
         {field: 'amount', headerName: 'Amount', minWidth: narrow ? 84 : 96, type: 'rightAligned', filter: 'agNumberColumnFilter',

@@ -24,11 +24,12 @@ hackathon-specific questions and answer them from `docs/DEVPOST.md`.
 |---|---|
 | Project name | Ask First Pay |
 | Elevator pitch / tagline | An AI front desk that can take a PayPal deposit on its own, but has to ask before it moves a cent. |
-| About the project (story) | Paste `docs/DEVPOST.md` from "Inspiration" to "What's next" (the seven sections). |
+| About the project (story) | Paste `docs/DEVPOST.md` from "Inspiration" to "What's next" (eight sections, including "Built with AG Grid"). |
+| AG Grid sponsor prize | Mention it: the ledger and the owner's mandate list are AG Grid Community grids; paste *Built with AG Grid* from `docs/DEVPOST.md` (features named there). |
 | Built with | python, fastapi, jinja, httpx, paypal-orders-v2, paypal-payments-v2, anthropic-claude, ed25519, webcrypto, ag-grid |
 | "Try it out" links | Repository URL (once public): https://github.com/cleveria-ai/ask-first-pay — OWNER confirms |
 | Video demo link | OWNER (URL after upload) |
-| Image gallery / thumbnail | `docs/screenshots/chat.png`, `docs/screenshots/owner-pending.png`, `docs/screenshots/ledger.png` (3:2 thumbnail: OWNER crops) |
+| Image gallery / thumbnail | In this order: `docs/screenshots/01-chat-booking.png`, `02-owner-approval.png`, `03-ledger-replay.png`, `04-cancellation-voided.png`, `05-owner-mobile.png` (all PNG; desktop 1280x720, phone 375x812; `06`-`08` optional). Captions: the table in `docs/DEVPOST.md` → *Screenshots*. Thumbnail (3:2): crop `02-owner-approval.png` (OWNER). Regenerate: `.venv/bin/python scripts/screenshots.py --dark`. |
 | PayPal APIs / products used | Orders v2 (create with intent AUTHORIZE, authorize), Payments v2 (capture, reauthorize, void, refund, get), OAuth 2.0 client credentials; sandbox |
 | AI used | Anthropic Claude via the Messages API with tool use (model id from `ASK_FIRST_MODEL`, default `claude-sonnet-5-5`); offline scripted model when no key is set |
 | Prior work / existing code disclosure | `libs/ask-first-mandate` created 2026-10-17 (inside the submission period) for our "Ask First for Alexa+" entry, reused under Apache-2.0; its README declares what it ports from an earlier public repository. Everything under `src/ask_first_pay/` is new. AG Grid Community vendored (MIT). |

@@ -190,3 +190,7 @@ def test_design_pages_load_their_scripts_locally(demo):
     for path in ("/owner", "/ledger"):
         text = demo.client.get(path).text
         assert '<script src="/static/vendor/ag-grid-community.min.js">' in text and "/static/grid.js" in text
+
+
+def test_design_favicon_is_not_a_404(demo):
+    assert demo.client.get("/favicon.ico").status_code == 204

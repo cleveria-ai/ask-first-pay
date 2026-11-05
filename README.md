@@ -92,6 +92,39 @@ and press **Agent tries to replay the last mandate**. Then **Cancellation** and 
 
 Tests: `python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/python -m pytest -q`.
 
+## What it looks like
+
+| Customer chat: deposit held | Owner's phone: one signed mandate | Ledger: replay rejected |
+|---|---|---|
+| ![chat](docs/screenshots/01-chat-booking.png) | ![owner](docs/screenshots/02-owner-approval.png) | ![ledger](docs/screenshots/03-ledger-replay.png) |
+
+Every page shows a **what just happened** line after each action (built from the ledger,
+the mandates and the bookings, never from model text). More in `docs/screenshots/`
+(cancellation voided, 375 px phone views, dark mode), regenerated with
+`.venv/bin/python scripts/screenshots.py` (needs `pip install playwright` in your venv).
+
+## Built with AG Grid
+
+The owner's mandate list (`/owner`) and the ledger (`/ledger`) are AG Grid Community 36.3.0
+grids, vendored and served locally (`src/ask_first_pay/demo/static/vendor/`, MIT license file
+alongside, no CDN). Setup in `src/ask_first_pay/demo/static/grid.js`; every feature used is in
+the free Community edition:
+
+- **Sorting** on every column (the ledger opens newest first; shift-click for multi-column).
+- **Filtering**: text and number column filters, **external filters** wired to the
+  *Executed / Rejected* and *Capture / Void / Refund* buttons (and *Pending / Used / Declined*
+  on the owner page), and the **quick filter** behind the search box.
+- **Cell renderers**: result and state as readable status chips (`rejected · replay` in red,
+  `executed` in green, `pending` in amber); each hash links to the raw ledger row
+  (`/ledger/entry/<n>`).
+- **Row selection driving a detail panel**: tap or press Enter on a row to see the signed fields
+  (jti, action, recipient, cap, expiry, issuer, plan hash) and the chain link (`hash`, `prev`,
+  a link to the previous row). On the owner page it shows the exact canonical bytes the phone signs.
+- **CSV export** of the ledger (`exportDataAsCsv`), the **Theming API** (`themeQuartz.withParams`)
+  fed from the page's own color tokens in light and dark mode, 44 px rows, `ensureDomOrder` and
+  keyboard navigation. On a phone the grid keeps four columns and the rest moves to the detail.
+- The server-rendered table stays underneath as the no-JS fallback.
+
 ## Run it against the PayPal sandbox
 
 1. Create your own app at developer.paypal.com (Apps & Credentials, **Sandbox**) and a sandbox

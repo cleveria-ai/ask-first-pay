@@ -22,7 +22,7 @@ from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -385,6 +385,10 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     def page(request: Request, name: str, **ctx):
         base = {"business": BUSINESS, "state": state, "simulated": state.simulated, "last": state.last}
         return templates.TemplateResponse(request, name, {**base, **ctx})
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        return Response(status_code=204)                # no icon file, and no 404 in the console
 
     @app.get("/healthz")
     def healthz():

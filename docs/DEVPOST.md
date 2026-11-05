@@ -63,9 +63,33 @@ any hour, but they are the only one who decides when a customer's money is actua
 - **Persistence:** optional SQLite (`ASK_FIRST_DB`), one row per shop, so a restart keeps
   bookings, signed approvals and the set of used mandates (a restart cannot reopen a replay).
 - **Demo:** FastAPI + Jinja pages (chat, owner phone, ledger), WebCrypto for the owner's key,
-  AG Grid Community for the ledger table, no CDN.
+  AG Grid Community for the ledger and the owner's mandate list (see *Built with AG Grid*), one
+  set of design tokens checked for 4.5:1 contrast in light and dark mode, 44 px touch targets,
+  and a "what just happened" line after every action. No CDN.
 - A fake PayPal provider follows the same rules (3-day honor period, 29-day expiry, idempotent
   request ids) and a contract test runs the same story against it and the real adapter.
+
+## Built with AG Grid
+
+The owner's mandate list (`/owner`) and the ledger (`/ledger`) are AG Grid Community 36.3.0
+grids, vendored and served locally (`src/ask_first_pay/demo/static/vendor/`, MIT license file
+alongside, no CDN). Setup in `src/ask_first_pay/demo/static/grid.js`; every feature used is in
+the free Community edition:
+
+- **Sorting** on every column (the ledger opens newest first; shift-click for multi-column).
+- **Filtering**: text and number column filters, **external filters** wired to the
+  *Executed / Rejected* and *Capture / Void / Refund* buttons (and *Pending / Used / Declined*
+  on the owner page), and the **quick filter** behind the search box.
+- **Cell renderers**: result and state as readable status chips (`rejected · replay` in red,
+  `executed` in green, `pending` in amber); each hash links to the raw ledger row
+  (`/ledger/entry/<n>`).
+- **Row selection driving a detail panel**: tap or press Enter on a row to see the signed fields
+  (jti, action, recipient, cap, expiry, issuer, plan hash) and the chain link (`hash`, `prev`,
+  a link to the previous row). On the owner page it shows the exact canonical bytes the phone signs.
+- **CSV export** of the ledger (`exportDataAsCsv`), the **Theming API** (`themeQuartz.withParams`)
+  fed from the page's own color tokens in light and dark mode, 44 px rows, `ensureDomOrder` and
+  keyboard navigation. On a phone the grid keeps four columns and the rest moves to the detail.
+- The server-rendered table stays underneath as the no-JS fallback.
 
 ## Challenges we ran into
 
@@ -90,7 +114,7 @@ any hour, but they are the only one who decides when a customer's money is actua
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
   PayPal sandbox by setting environment variables.
-- 165 automated tests, all offline, including the attacks listed under "Try to break it"
+- 192 automated tests, all offline, including the attacks listed under "Try to break it"
   in the README.
 
 ## What we learned
@@ -112,6 +136,21 @@ any hour, but they are the only one who decides when a customer's money is actua
 - A daily sweep that reauthorizes holds before the 29-day expiry, and reminders to the owner.
 - Per-owner policies (for example "approve no-show captures under 20.00 automatically") expressed
   as standing mandates with their own cap and expiry.
+
+## Screenshots (image gallery)
+
+All from the offline demo in headless Chromium (`scripts/screenshots.py`), PNG.
+
+| File | Size | Shows |
+|---|---|---|
+| `docs/screenshots/01-chat-booking.png` | 1280x720 | the customer books; the deposit is held on PayPal, not charged |
+| `docs/screenshots/02-owner-approval.png` | 1280x720 | the owner's phone shows the signed capture mandate; the mandate grid beside it |
+| `docs/screenshots/03-ledger-replay.png` | 1280x720 | the replay is rejected; ledger grid with status chips and the row's signed fields |
+| `docs/screenshots/04-cancellation-voided.png` | 1280x720 | a cancellation approved: the hold is voided, nothing charged |
+| `docs/screenshots/05-owner-mobile.png` | 375x812 | the owner's view on a phone |
+| `docs/screenshots/06-ledger-mobile.png` | 375x812 | the ledger grid and row detail on a phone |
+| `docs/screenshots/07-chat-mobile.png` | 375x812 | the chat on a phone |
+| `docs/screenshots/08-ledger-dark.png` | 1280x720 | the ledger in dark mode |
 
 ## Built with
 
