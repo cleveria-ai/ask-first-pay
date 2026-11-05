@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Checkout{% endblock %}
 {% block main %}
-<h1>Fake PayPal checkout</h1>
-<p class="card">Hold <strong>{{ order.currency }} {{ '%.2f' % order.amount }}</strong> for {{ order.reference }}.
-This only <em>holds</em> the money (an authorization). Nothing is charged unless the owner later approves a capture.</p>
-<p>Order <code>{{ order.order_id }}</code> · status {{ order.status }}</p>
+<div class="page-head"><h1>Simulated PayPal checkout</h1><p>Offline stand-in for PayPal's payer approval page.</p></div>
+<div class="card">
+<p>Hold <strong>{{ order.currency }} {{ '%.2f' % order.amount }}</strong> for {{ order.reference }}.</p>
+<p>This only <em>holds</em> the money (an authorization). Nothing is charged unless the owner later approves a capture.</p>
+<p class="hint">Order <code>{{ order.order_id }}</code> · status <span class="chip {{ 'warn' if order.status == 'CREATED' else 'ok' }}">{{ order.status }}</span></p>
 {% if order.status == 'CREATED' %}
 <form method="post" action="/checkout/{{ order.order_id }}/approve"><button class="btn" type="submit">Approve the hold</button></form>
 {% else %}<p><a class="btn" href="/chat#end">Back to the chat</a></p>{% endif %}
+</div>
 {% endblock %}

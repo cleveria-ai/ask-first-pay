@@ -3,24 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>{% block title %}Ask First Pay{% endblock %} · Ask First Pay demo</title>
 <link rel="stylesheet" href="/static/app.css">
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
-  <a class="brand" href="/">Ask First Pay <span>demo</span></a>
+ <div class="wrap">
+  <a class="brand" href="/"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="currentColor" opacity=".12"/><path d="M14 5l7 3v5c0 4.6-3 8.3-7 9.5C10 21.3 7 17.6 7 13V8z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10.5 13.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Ask First Pay <span>demo</span></a>
   <nav aria-label="Pages">
     <a href="/chat" {% if nav == 'chat' %}aria-current="page"{% endif %}>Chat</a>
     <a href="/owner" {% if nav == 'owner' %}aria-current="page"{% endif %}>Owner</a>
     <a href="/ledger" {% if nav == 'ledger' %}aria-current="page"{% endif %}>Ledger</a>
   </nav>
+ </div>
 </header>
-<main id="main">
+<main id="main" class="wrap">
+{% if last %}
+<div id="happened" class="happened {{ last.tone }}" role="status" aria-live="polite">
+  <span class="tag">{{ {'ok': 'Done', 'bad': 'Refused', 'warn': 'Waiting', 'info': 'Info'}[last.tone] }}</span>
+  <div><span class="sr">What just happened: </span><strong>{{ last.label }}</strong>
+    <ul>{% for i in last['items'] %}<li>{{ i }}</li>{% endfor %}</ul></div>
+</div>
+{% else %}
+<div id="happened" class="happened info" role="status" aria-live="polite">
+  <span class="tag">Start</span>
+  <div><strong>Nothing has happened yet.</strong>
+    <ul><li>Pair the owner's phone on <a href="/owner">Owner</a>, then book in the <a href="/chat">chat</a> or press a scenario.</li></ul></div>
+</div>
+{% endif %}
 {% block main %}{% endblock %}
 </main>
-<footer class="foot">Fictional business. {% if simulated %}Payments are simulated (FakeProvider).{% else %}PayPal sandbox.{% endif %}
- Money moves only through the mandate gate.</footer>
+<footer class="foot"><div class="wrap">Fictional business. {% if simulated %}Payments are simulated (FakeProvider, offline).{% else %}PayPal sandbox.{% endif %}
+ Money moves only through the mandate gate.</div></footer>
 {% block scripts %}{% endblock %}
 </body>
 </html>

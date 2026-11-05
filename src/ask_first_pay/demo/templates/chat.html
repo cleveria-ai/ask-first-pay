@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Customer chat{% endblock %}
+{% block bodyclass %}wide{% endblock %}
 {% block main %}
-<h1>Customer chat <small>{{ business }}</small></h1>
-<ol class="chat" aria-label="Conversation" aria-live="polite">
+<div class="page-head">
+  <h1>Customer chat</h1>
+  <p>{{ business }} · front desk run by an AI agent that can hold a deposit, never move it.</p>
+</div>
+<div class="split">
+<section aria-label="Conversation with the front desk">
+<ol class="chat scroll" aria-label="Conversation" tabindex="0">
 {% for m in messages %}
   <li class="msg {{ m.who }}"><span class="who">{{ {'customer': 'You', 'business': business, 'system': 'Note'}[m.who] }}</span>
     <p>{{ m.text }}</p>
@@ -17,12 +23,22 @@
          placeholder="book {{ slots[0] }}" required>
   <button class="btn" type="submit">Send</button>
 </form>
-<p class="hint">Agent model: {{ model_name }}.</p>
-<p class="hint">Quick: {% for s in slots %}<code>book {{ s }}</code>{% if not loop.last %} · {% endif %}{% endfor %} · <code>cancel</code></p>
-<h2>Scenarios</h2>
-<div class="stack">
-  <form method="post" action="/scenario/no_show"><button class="btn secondary" type="submit">No-show</button></form>
-  <form method="post" action="/scenario/cancel"><button class="btn secondary" type="submit">Cancellation</button></form>
-  <form method="post" action="/scenario/goodwill"><button class="btn secondary" type="submit">Goodwill</button></form>
+<ul class="quick" aria-label="Quick messages">
+{% for s in slots %}<li><form method="post" action="/chat/send"><button type="submit" name="message" value="book {{ s }}">book {{ s }}</button></form></li>{% endfor %}
+  <li><form method="post" action="/chat/send"><button type="submit" name="message" value="cancel">cancel</button></form></li>
+</ul>
+</section>
+<section aria-labelledby="biz-h">
+<p class="meta"><span class="chip {{ 'info' if model_name == 'Claude' else 'neutral' }}">Agent model: {{ model_name }}</span>
+  <span class="chip neutral">{{ 'Simulated PayPal' if simulated else 'PayPal sandbox' }}</span></p>
+<h2 id="biz-h">Act as the business</h2>
+<p class="hint">Each scenario makes the agent ask the owner; approve it on <a href="/owner">Owner</a>.</p>
+<div class="actions">
+  <form method="post" action="/scenario/no_show"><button class="btn secondary" type="submit">No-show<small>capture the held deposit</small></button></form>
+  <form method="post" action="/scenario/cancel"><button class="btn secondary" type="submit">Cancellation<small>void the hold, nothing charged</small></button></form>
+  <form method="post" action="/scenario/goodwill"><button class="btn secondary" type="submit">Goodwill<small>capture, then refund part</small></button></form>
+</div>
+</section>
 </div>
 {% endblock %}
+{% block scripts %}<script src="/static/chat.js"></script>{% endblock %}

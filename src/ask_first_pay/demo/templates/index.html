@@ -1,19 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Start{% endblock %}
 {% block main %}
-<h1>An AI front desk that can only ask before moving money</h1>
-<p>{{ business }}'s agent books visits and holds a $10 deposit. Capturing, voiding or refunding it
-needs a single-use mandate that the owner signs on their phone. Try the three stories; each one
-asks the owner, so open <a href="/owner">the owner page</a> to approve.</p>
+<div class="page-head">
+  <h1>An AI front desk that can only ask before moving money</h1>
+  <p>{{ business }}'s agent books visits and holds a $10 deposit on PayPal. Capturing, voiding or
+  refunding it needs a single-use mandate the owner signs on their phone.</p>
+</div>
 <ol class="steps">
   <li><a href="/owner">Owner page</a>: enter the pairing code printed in the terminal (once).</li>
   <li>Press a scenario below, or <a href="/chat">chat as the customer</a>.</li>
   <li>Approve or decline on the owner page, then read the <a href="/ledger">ledger</a>.</li>
 </ol>
 <h2>Scenarios</h2>
-<div class="stack">
-  <form method="post" action="/scenario/no_show"><button class="btn" type="submit">No-show: capture the deposit</button></form>
-  <form method="post" action="/scenario/cancel"><button class="btn" type="submit">Cancellation: void the hold</button></form>
-  <form method="post" action="/scenario/goodwill"><button class="btn" type="submit">Goodwill: capture, then refund part</button></form>
+<div class="actions">
+  <form method="post" action="/scenario/no_show"><button class="btn secondary" type="submit">No-show<small>capture the deposit</small></button></form>
+  <form method="post" action="/scenario/cancel"><button class="btn secondary" type="submit">Cancellation<small>void the hold</small></button></form>
+  <form method="post" action="/scenario/goodwill"><button class="btn secondary" type="submit">Goodwill<small>capture, then refund part</small></button></form>
 </div>
 {% endblock %}
