@@ -1,0 +1,173 @@
+1
+00:00:00,300 --> 00:00:04,392
+If you run a small clinic or salon,
+no-shows cost you real money,
+
+2
+00:00:04,442 --> 00:00:05,730
+so you take deposits.
+
+3
+00:00:05,780 --> 00:00:08,469
+Giving the front desk
+to an AI is tempting,
+
+4
+00:00:08,519 --> 00:00:13,439
+but an agent that can charge or refund
+on its own is one bad message away from
+
+5
+00:00:13,489 --> 00:00:14,650
+refunding everyone.
+
+6
+00:00:15,300 --> 00:00:19,989
+Ask First Pay lets the agent do
+the routine work with PayPal,
+
+7
+00:00:20,039 --> 00:00:24,650
+and leaves every decision about
+moving money with the owner.
+
+8
+00:00:25,300 --> 00:00:26,858
+A customer books.
+
+9
+00:00:26,908 --> 00:00:32,059
+The agent creates a PayPal
+order with intent AUTHORIZE.
+
+10
+00:00:32,109 --> 00:00:38,301
+The customer approves it, PayPal's
+signed webhook tells the agent,
+
+11
+00:00:38,351 --> 00:00:40,949
+and the agent authorizes it.
+
+12
+00:00:40,999 --> 00:00:47,475
+Ten dollars are held, not charged,
+and the agent did that on its own,
+
+13
+00:00:47,525 --> 00:00:49,650
+because no money moved.
+
+14
+00:00:50,300 --> 00:00:52,542
+The customer doesn't show up.
+
+15
+00:00:52,592 --> 00:00:56,731
+The agent can't capture the
+deposit; it can only ask.
+
+16
+00:00:56,781 --> 00:01:02,421
+The owner's phone shows exactly what
+was asked, from the signed mandate,
+
+17
+00:01:02,471 --> 00:01:08,506
+not from the model's words: capture,
+this authorization, at most ten dollars,
+
+18
+00:01:08,556 --> 00:01:10,166
+single use, expiring.
+
+19
+00:01:10,216 --> 00:01:12,537
+One tap signs it on the phone.
+
+20
+00:01:12,587 --> 00:01:16,094
+Only now does the capture
+reach PayPal, once,
+
+21
+00:01:16,144 --> 00:01:19,650
+with the mandate's id
+as the idempotency key.
+
+22
+00:01:20,300 --> 00:01:26,929
+What if the agent, or anyone,
+tries to use that approval again?
+
+23
+00:01:26,979 --> 00:01:30,321
+The gate rejects it as a replay,
+
+24
+00:01:30,371 --> 00:01:36,894
+and the attempt is written to
+the ledger like everything else.
+
+25
+00:01:36,944 --> 00:01:39,650
+One approval, one capture.
+
+26
+00:01:40,300 --> 00:01:44,121
+And if a customer tries to
+talk the agent into a refund?
+
+27
+00:01:44,171 --> 00:01:46,194
+It has no tool that can do it.
+
+28
+00:01:46,244 --> 00:01:49,650
+Nothing reaches the owner,
+nothing reaches PayPal.
+
+29
+00:01:50,300 --> 00:01:52,596
+Another customer cancels.
+
+30
+00:01:52,646 --> 00:01:59,541
+Because the deposit was only held, the
+right move is a void, not a refund.
+
+31
+00:01:59,591 --> 00:02:05,641
+Releasing a hold is still a
+decision, so it also needs the owner,
+
+32
+00:02:05,691 --> 00:02:08,362
+with a symbolic one-cent cap.
+
+33
+00:02:08,412 --> 00:02:14,650
+Approved: the authorization is
+voided and nothing was ever charged.
+
+34
+00:02:15,300 --> 00:02:22,562
+Every attempt, accepted or rejected,
+is in a hash-chained ledger.
+
+35
+00:02:22,612 --> 00:02:27,288
+Change any row and the chain check breaks.
+
+36
+00:02:27,338 --> 00:02:29,650
+Anyone can verify it.
+
+37
+00:02:30,300 --> 00:02:31,729
+Ask First Pay.
+
+38
+00:02:31,779 --> 00:02:39,650
+The agent asks, the owner decides, and
+PayPal moves the money exactly once.
