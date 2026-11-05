@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Owner{% endblock %}
+{% block main %}
+<h1>Owner approvals</h1>
+<p id="device-status" class="card" data-paired="{{ 'yes' if paired else 'no' }}" role="status">
+  {% if paired %}A phone is paired (key {{ paired[:12] }}…).{% else %}No phone is paired yet.{% endif %}
+</p>
+
+{% if not paired %}
+<section aria-labelledby="pair-h" id="pair-section">
+  <h2 id="pair-h">Pair this phone</h2>
+  <p>Enter the one-time code printed in the terminal. This browser creates an Ed25519 key that never leaves it.</p>
+  <form id="pair-form" class="composer">
+    <label for="code">Pairing code</label>
+    <input id="code" name="code" type="text" autocomplete="off" inputmode="text" required>
+    <button class="btn" type="submit">Pair</button>
+  </form>
+  <p id="pair-msg" role="status"></p>
+</section>
+{% endif %}
+
+<section aria-labelledby="pending-h">
+  <h2 id="pending-h">Waiting for you ({{ pending|length }})</h2>
+  <ul class="pending-list" id="pending-list">
+  {% for r in pending %}
+    <li class="card mandate" data-id="{{ r.id }}" data-canonical="{{ r.canonical }}">
+      <p class="headline"><strong>{{ r.headline }}</strong></p>
+      <p class="what"><code>{{ r.action }}</code> on <code>{{ r.resource }}</code></p>
+      <dl>
+        <dt>PayPal resource</dt><dd>{{ r.resource }}</dd>
+        <dt>At most</dt><dd>USD {{ r.cap }}</dd>
+        <dt>Expires</dt><dd>{{ r.exp_text }}</dd>
+        <dt>Single use</dt><dd>yes</dd>
+      </dl>
+      <p class="hint">{{ r.description }}</p>
+      <div class="row">
+        <button class="btn approve" type="button">Approve</button>
+        <button class="btn secondary decline" type="button">Decline</button>
+      </div>
+      <p class="result" role="status"></p>
+    </li>
+  {% else %}
+    <li class="empty">Nothing is waiting. Press a <a href="/">scenario</a> to make the agent ask.</li>
+  {% endfor %}
+  </ul>
+</section>
+
+<section aria-labelledby="all-h">
+  <h2 id="all-h">All mandates</h2>
+  <div data-grid="mandates" class="grid-wrap">
+    <table class="plain">
+      <caption class="sr">Every mandate the agent has asked for</caption>
+      <thead><tr><th scope="col">Mandate</th><th scope="col">State</th><th scope="col">Action</th><th scope="col">Resource</th><th scope="col">Cap</th><th scope="col">Expires</th></tr></thead>
+      <tbody>{% for r in rows %}<tr><td>{{ r.short }}</td><td>{{ r.state }}</td><td>{{ r.action }}</td><td>{{ r.resource }}</td><td>{{ r.cap }}</td><td>{{ r.exp_text }}</td></tr>
+      {% else %}<tr><td colspan="6">No mandates yet.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  <script type="application/json" id="mandates-data">{{ rows | tojson }}</script>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/ag-grid-community.min.js"></script>
+<script src="/static/grid.js"></script>
+<script src="/static/owner.js"></script>
+{% endblock %}
