@@ -18,7 +18,7 @@ from dataclasses import asdict
 from ask_first import MandateRejected, generate_pair, public_key_hex
 from ask_first.keys import public_key_from_hex
 from ask_first.canonical import canonical
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
@@ -70,15 +70,35 @@ class DemoState:
         self.lock = threading.RLock()
         self.last: dict | None = None          # the "what just happened" line (demo/happened.py)
         self.webhook_sim, self.webhooks = self._webhooks()
+        # The head of the ledger, remembered OUTSIDE the ledger file: the only way a hash chain can
+        # reveal rows cut off its end (or a whole chain recomputed by someone with file access).
+        self.ledger_head: dict | None = None
+        self._track_ledger_head()
         if store is not None and (snap := store.load()) is not None:
             self.restore(snap)
         if store is not None:
             self.engine.executor = self._saved_before(self.engine.executor)
 
+    def _track_ledger_head(self) -> None:
+        ledger = self.engine.ledger
+        last = next(iter(reversed(ledger.entries())), None)
+        if last and "hash" in last:
+            self.ledger_head = {"n": last["n"], "hash": last["hash"]}
+        append = ledger.append
+
+        def tracked(row, *args, **kw):
+            out = append(row, *args, **kw)
+            if "hash" in out and not out.get("out_of_chain"):
+                self.ledger_head = {"n": out["n"], "hash": out["hash"]}
+            return out
+        ledger.append = tracked
+
     def _saved_before(self, executor):
         """The engine marks a mandate used, then calls PayPal. Save that mark first, so a crash
         during the call cannot leave an approved-but-unused mandate on disk."""
         def run(mandate, requested):
+            if not self.store.claim_mandate(mandate["jti"]):      # shared by every process on this database
+                raise RuntimeError("this mandate was already spent (claimed in the database)")
             self.persist()
             return executor(mandate, requested)
         return run
@@ -100,6 +120,7 @@ class DemoState:
         e, f = self.engine, self.front
         return {"version": 1, "simulated": self.simulated,
                 "engine": {"pending": e.pending, "approved": e.approved, "used": sorted(e.used)},
+                "ledger_head": self.ledger_head,
                 "paired_key": self.paired_key, "declined": sorted(self.declined),
                 "scenario_used": sorted(self.scenario_used),
                 "front": {"messages": [asdict(m) for m in f.messages],
@@ -124,7 +145,9 @@ class DemoState:
                            for k, v in snap["engine"]["approved"].items()})
         # Used = what the snapshot says, plus anything the ledger shows was executed or failed
         # (a crash between the PayPal call and the save must not reopen that mandate).
-        e.used.update(set(snap["engine"]["used"]) | {str(r.get("mandate_id")) for r in e.ledger.entries()
+        if snap.get("ledger_head"):
+            self.ledger_head = dict(snap["ledger_head"])
+        e.used.update(set(snap["engine"]["used"]) | self.store.used_mandates() | {str(r.get("mandate_id")) for r in e.ledger.entries()
                                                 if r.get("result") in ("executed", "failed")})
         self.paired_key = snap["paired_key"]
         if self.paired_key:
@@ -336,6 +359,13 @@ class DemoState:
                          "tone": "ok" if e.get("result") == "executed" else "bad",
                          "signed": {k: m[k] for k in SIGNED_FIELDS if k in m}})
         v = dict(led["verification"])
+        head = self.ledger_head
+        if v["ok"] and head:
+            row = next((e for e in led["entries"] if e.get("n") == head["n"]), None)
+            if row is None or row.get("hash") != head["hash"]:
+                v.update(ok=False, kind="truncated", broken_at=None,
+                         message=f"the last row this server wrote (n={head['n']}) is missing or changed: "
+                                 f"rows were removed from the end, or the chain was rewritten")
         v["empty"] = not led["entries"]
         return rows, v
 
@@ -378,6 +408,24 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
         response = await call_next(request)
         if request.method == "POST":
             await run_in_threadpool(state.persist)    # a no-op without ASK_FIRST_DB
+        return response
+    @app.middleware("http")
+    async def same_origin_and_headers(request: Request, call_next):
+        # CSRF: a browser always sends Origin on a cross-site POST. Curl, tests and PayPal's server
+        # send none and pass; a page on another site cannot press our buttons (decline, scenarios,
+        # chat). Approving also needs the owner's signature, which no page of ours can forge.
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin")
+            if (origin is not None and (origin == "null" or urlparse(origin).netloc != request.headers.get("host", ""))) \
+                    or request.headers.get("sec-fetch-site") == "cross-site":
+                return JSONResponse({"ok": False, "reason": "cross_site", "detail": "cross-site request refused"}, status_code=403)
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"            # the one-tap Approve button must not be framed
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
         return response
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")

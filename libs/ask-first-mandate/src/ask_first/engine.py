@@ -28,6 +28,7 @@ from ask_first.ledger import Ledger
 from ask_first.receipt import Receipt
 
 VERSION = "1"
+MAX_PAIR_FAILURES = 10     # wrong/used/expired codes tolerated before every outstanding code is revoked
 
 
 def _valid_amount(amount: Any) -> bool:
@@ -103,6 +104,7 @@ class MandateEngine:
     # mandates (measured in the demo: 32 distinct mandates at once lost or corrupted payments
     # without it).
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+    _pair_failures: int = field(default=0, repr=False, compare=False)
 
     def request(self, agent: str, action: str, recipient: str, amount: float,
                 ttl_s: int = 300) -> dict:
@@ -121,7 +123,9 @@ class MandateEngine:
         key. Show it on the server console -- never send it over the network.
         """
         code = secrets.token_hex(4)
-        self.pairing_codes[code] = {"exp": int(time.time()) + int(ttl_s), "used": False}
+        with self._lock:
+            self._pair_failures = 0                      # a fresh code gets a fresh allowance of guesses
+            self.pairing_codes[code] = {"exp": int(time.time()) + int(ttl_s), "used": False}
         return code
 
     def pair(self, code: str, device_pub_hex: str) -> str:
@@ -129,14 +133,23 @@ class MandateEngine:
         single-use code. A second attempt with the same code is rejected.
         """
         with self._lock:
-            entry = self.pairing_codes.get(code)
+            entry = self.pairing_codes.get(code) if isinstance(code, str) else None
+            failure = None
             if entry is None:
-                raise MandateRejected("unknown_code", f"the code {code!r} does not exist")
-            if entry["used"]:
-                raise MandateRejected("code_used", f"the code {code!r} was already used: "
-                                                   f"it is single-use")
-            if int(time.time()) > entry["exp"]:
-                raise MandateRejected("code_expired", f"the code {code!r} has expired")
+                failure = MandateRejected("unknown_code", f"the code {code!r} does not exist")
+            elif entry["used"]:
+                failure = MandateRejected("code_used", f"the code {code!r} was already used: "
+                                                       f"it is single-use")
+            elif int(time.time()) > entry["exp"]:
+                failure = MandateRejected("code_expired", f"the code {code!r} has expired")
+            if failure is not None:
+                # The code is 32 bits and the endpoint is open: bound the guessing. After
+                # MAX_PAIR_FAILURES misses every outstanding code is revoked; the owner asks the
+                # console for a new one.
+                self._pair_failures += 1
+                if self._pair_failures >= MAX_PAIR_FAILURES:
+                    self.pairing_codes.clear()
+                raise failure
             try:
                 pub = public_key_from_hex(device_pub_hex)
             except ValueError as e:

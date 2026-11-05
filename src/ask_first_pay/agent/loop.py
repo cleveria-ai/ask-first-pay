@@ -83,6 +83,6 @@ def run_turn(state: AgentState | None, message: str, *, gate: AgentGate, desk: H
         if not uses:
             break
         results = [{"type": "tool_result", "tool_use_id": u["id"],
-                    "content": str(box.call(u["name"], dict(u.get("input") or {})))} for u in uses]
+                    "content": str(box.call(u.get("name"), u.get("input") or {}))} for u in uses]
         state.messages.append({"role": "user", "content": results})
     return state, replies
