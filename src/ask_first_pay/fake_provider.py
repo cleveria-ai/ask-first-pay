@@ -2,7 +2,15 @@
 
 It models what the demo stories need from PayPal: the 3-day honor period and 29-day expiry of an
 authorization (with an injectable clock), partial captures with `final_capture`, void only before
-any capture, refunds only on captured money, and idempotency by `request_id`.
+any capture, refunds only on captured money, and idempotency by `request_id` (create_order too:
+the same PayPal-Request-Id returns the same order, a different one creates a new order).
+
+The honor period is only how long PayPal *guarantees* the funds. As on PayPal, a capture is still
+accepted after it, up to day 29 of the original authorization ("A hold on the money that is valid
+for 29 days ... Payment capture is subject to risk and money availability",
+https://developer.paypal.com/docs/checkout/standard/customize/authorization/); reauthorizing is
+how a business renews the guarantee, and PayPal refuses it inside the honor period
+(REAUTHORIZATION_TOO_SOON).
 """
 from __future__ import annotations
 
@@ -49,11 +57,16 @@ class FakeProvider:
             self._set_auth(a, "EXPIRED")
             raise ProviderError("AUTHORIZATION_EXPIRED", a.authorization_id)
 
-    def create_order(self, amount: float, currency: str, reference: str) -> Order:
+    def create_order(self, amount: float, currency: str, reference: str,
+                     request_id: str | None = None) -> Order:
+        if request_id is not None and (r := self._replay(request_id)) is not None:
+            return self.orders.get(r.order_id, r)          # the same order, as it is now
         self.calls.append(("create_order", amount, currency, reference))
         oid = self._id("ORDER")
         order = Order(oid, amount, currency, reference, f"https://sandbox.example/approve/{oid}", "CREATED")
         self.orders[oid] = order
+        if request_id is not None:
+            self._done[request_id] = order
         return order
 
     def approve(self, order_id: str) -> None:
@@ -101,9 +114,7 @@ class FakeProvider:
         if a.status not in ("CREATED", "PARTIALLY_CAPTURED"):
             raise ProviderError("AUTHORIZATION_ALREADY_CAPTURED" if "CAPTURED" in a.status else
                                 f"AUTHORIZATION_{a.status}", authorization_id)
-        self._check_alive(a)
-        if self.clock() - self.auth_born[authorization_id] > HONOR_S:
-            raise ProviderError("HONOR_PERIOD_EXPIRED", "reauthorize before capturing")
+        self._check_alive(a)          # refused only after day 29; after day 3 the funds are not guaranteed
         if self._captured(authorization_id) + amount > a.amount + 1e-9:
             raise ProviderError("AMOUNT_EXCEEDS_AUTHORIZATION", f"{amount} > remaining")
         c = Capture(self._id("CAP"), authorization_id, amount, a.currency, "COMPLETED")

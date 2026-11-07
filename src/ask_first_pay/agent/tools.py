@@ -5,6 +5,8 @@ unchanged request back to the gate, and the gate runs it only if the owner appro
 """
 from __future__ import annotations
 
+import uuid
+
 from ask_first import MandateRejected
 
 from ..gate import AgentGate, HoldDesk
@@ -14,6 +16,24 @@ from .state import AgentState
 SLOTS = ["2026-11-16 09:00", "2026-11-16 11:30", "2026-11-17 15:00", "2026-11-18 10:00"]
 DEPOSIT = 10.00
 CURRENCY = "USD"
+# What PayPal answers a reauthorize with when the CURRENT hold is untouched (Payments v2 spec,
+# https://developer.paypal.com/api/payments/v2/schema.json): too soon (inside the 3-day honor
+# period), or this authorization cannot be reauthorized (it already is a reauthorization, or the
+# payment source does not support it). Any other definitive 4xx (voided, expired, captured, not
+# found, declined, ...) means the deposit is no longer held.
+HOLD_STILL_VALID = frozenset({"REAUTHORIZATION_TOO_SOON", "REAUTHORIZATION_NOT_SUPPORTED",
+                              "REAUTHORIZATION_NOT_SUPPORTED_FOR_PAYMENT_SOURCE"})
+HOLD_ENDED = "hold_ended"     # booking status after a definitive "this hold is gone"
+
+
+def _issues(e: ProviderError) -> set[str]:
+    """PayPal puts the real reason in details[].issue under a generic name such as
+    UNPROCESSABLE_ENTITY; the fake provider puts it in the code itself. Read both."""
+    found = {e.code}
+    for d in (e.details or {}).get("details") or []:
+        if isinstance(d, dict) and d.get("issue"):
+            found.add(str(d["issue"]))
+    return found
 
 
 def _schema(name, description, props=None, required=()):
@@ -77,7 +97,12 @@ class Toolbox:
 
     def t_create_deposit_order(self, booking_id: str) -> dict:
         b = self.s.bookings[booking_id]
-        o = self.desk.create_order(b["deposit"], CURRENCY, booking_id)
+        # One PayPal-Request-Id per order, chosen once and kept on the booking: a retry of this
+        # same creation (after a timeout, or the model calling the tool twice) gets the same order
+        # back, and no other booking, conversation or restart can ever share it.
+        if not b.get("order_request_id"):
+            b["order_request_id"] = str(uuid.uuid4())
+        o = self.desk.create_order(b["deposit"], CURRENCY, booking_id, request_id=b["order_request_id"])
         b["order_id"] = o.order_id
         return {"order_id": o.order_id, "approve_url": o.approve_url, "status": o.status}
 
@@ -90,8 +115,11 @@ class Toolbox:
         return {"authorization_id": a.authorization_id, "status": a.status}
 
     def t_refresh_hold(self, booking_id: str) -> dict:
-        """Reauthorize after the honor period. Inside it, PayPal refuses (too soon): the current
-        hold is still good, so that is reported as 'not needed', not as a failure."""
+        """Reauthorize after the honor period. Three outcomes, kept apart:
+        - PayPal says too soon / not reauthorizable: the current hold is untouched ("not needed");
+        - PayPal did not answer (timeout, 5xx): nothing is known, keep the current hold;
+        - any other definitive refusal (voided, expired, captured, not found): the deposit is no
+          longer held. The booking leaves `deposit_held`, so no capture can be requested on it."""
         b = self.s.bookings[booking_id]
         if not b["authorization_id"] or b["status"] != "deposit_held":
             return {"error": "no held deposit for this booking"}
@@ -100,9 +128,16 @@ class Toolbox:
             a = self.desk.reauthorize(old, f"reauth-{old}")       # idempotent: one reauthorization per hold
         except ProviderError as e:
             if e.transient:
-                raise
-            return {"refreshed": False, "authorization_id": old,
-                    "reason": f"{e.code}: the current hold is still valid, capture it as is"}
+                return {"refreshed": False, "authorization_id": old, "deposit_held": True,
+                        "reason": f"{e.code}: PayPal did not answer; the current hold stays as it is"}
+            issues = _issues(e)
+            if issues & HOLD_STILL_VALID:
+                return {"refreshed": False, "authorization_id": old, "deposit_held": True,
+                        "reason": f"{'/'.join(sorted(issues & HOLD_STILL_VALID))}: the current hold is still valid, capture it as is"}
+            b["status"] = HOLD_ENDED
+            return {"error": f"the deposit is no longer held ({'/'.join(sorted(issues))}); "
+                             "do not ask the owner to capture it", "deposit_held": False,
+                    "authorization_id": old}
         b["authorization_id"] = a.authorization_id
         return {"refreshed": True, "authorization_id": a.authorization_id, "replaces": old, "status": a.status}
 
@@ -135,7 +170,9 @@ class Toolbox:
 
     def t_request_void(self, booking_id: str) -> dict:
         b = self.s.bookings[booking_id]
-        if not b["authorization_id"]:
+        # Only a hold can be released: after a capture PayPal refuses the void (PREVIOUSLY_CAPTURED),
+        # so the owner must never be asked to sign one.
+        if not b["authorization_id"] or b["status"] != "deposit_held":
             return {"error": "no held deposit for this booking"}
         return self._ask("void_deposit", b["authorization_id"], 0.01, booking_id)
 

@@ -15,6 +15,7 @@ STATUS_TEXT = {
     "cancelled": "hold released (voided); nothing charged",
     "refunded": "captured deposit refunded",
     "partly_refunded": "part of the captured deposit refunded",
+    "hold_ended": "PayPal says the hold is gone (voided, expired or captured elsewhere); nothing to capture",
 }
 
 
