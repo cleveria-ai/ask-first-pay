@@ -87,5 +87,5 @@ def test_no_show_end_to_end_five_days_later_reauthorizes_and_captures(tmp_path):
 def test_pages_owner_reads_a_plain_headline_from_signed_fields_and_no_pairing_form_once_paired(demo):
     demo.client.post("/scenario/no_show")
     text = demo.client.get("/owner").text
-    assert "Keep up to $10.00 of the held deposit (no-show)" in text
+    assert "Keep up to $10.00 of the held deposit" in text and ">No-show<" in text   # N9: the kicker names the story
     assert 'id="pair-form"' not in text                     # the demo fixture already paired

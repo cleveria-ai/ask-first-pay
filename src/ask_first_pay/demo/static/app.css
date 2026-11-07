@@ -134,6 +134,27 @@ input:focus-visible{border-color:var(--accent);outline-offset:0}
 .mandate .headline{font-size:var(--fs-lg);margin:var(--s2) 0 var(--s1)}
 .mandate dl{display:grid;grid-template-columns:auto 1fr;gap:var(--s1) var(--s4);margin:var(--s3) 0;padding:var(--s3);background:var(--surface-2);border-radius:var(--radius-sm)}
 .mandate dt{color:var(--muted);font-size:var(--fs-sm)} .mandate dd{margin:0;font-weight:600;word-break:break-all}
+.mandate.act-void_deposit{border-left-color:var(--info)}
+.mandate-top{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.kicker{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.expires{font-size:var(--fs-sm);font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.mandate p.headline{font-size:var(--fs-lg);font-weight:700;line-height:1.3;margin:var(--s1) 0 2px}
+.mandate .who{margin:0;color:var(--muted);font-size:var(--fs-sm)}
+.mandate .chips{margin:var(--s2) 0 0}
+.approval-id{margin:var(--s2) 0 var(--s3);font-size:var(--fs-sm);color:var(--muted)}
+.approval-id .rid,.detail dd.rid{font-weight:700;color:var(--accent-ink);background:var(--accent-soft);padding:1px 6px;border-radius:6px;word-break:normal}
+.decide .btn{min-height:48px}
+details.signed{margin-top:var(--s2);border-top:1px solid var(--line)}
+details.signed summary{min-height:var(--tap);display:flex;align-items:center;gap:var(--s2);cursor:pointer;font-weight:600;font-size:var(--fs-sm);color:var(--accent-ink);list-style:none}
+details.signed summary::-webkit-details-marker{display:none}
+details.signed summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+details.signed[open] summary::before{transform:rotate(45deg)}
+#device-status code{word-break:normal}
+@media (prefers-color-scheme:dark){details.signed summary{color:var(--accent)}}
+details.signed dl{margin-top:0}
+details.signed .hint{margin-bottom:0}
+.new-request{display:flex;width:100%;min-height:var(--tap);align-items:center;justify-content:center;margin:0 0 var(--s3);border:0;border-radius:999px;background:var(--accent);color:var(--accent-fg);font:inherit;font-weight:700;cursor:pointer}
+.new-request[hidden]{display:none}
 .result{min-height:1.5em;margin:var(--s2) 0 0;font-weight:600}
 .result.ok{color:var(--ok)} .result.bad{color:var(--bad)}
 
@@ -160,9 +181,36 @@ table.plain th,table.plain td{border-bottom:1px solid var(--line);padding:var(--
 .ledger-layout{display:grid;gap:var(--s3)}
 .ledger-layout .detail{margin-top:0}
 @media (min-width:1100px){.ledger-layout.has-detail{grid-template-columns:minmax(0,1fr) 360px;align-items:start}}
-@media (max-width:420px){.brand span{display:none}.top nav a{padding:0 10px}.top .wrap{flex-wrap:nowrap}}
+@media (max-width:420px){.brand span{display:none}.top nav{gap:0}.top nav a{padding:0 10px}.top .wrap{flex-wrap:nowrap;gap:var(--s2);padding-left:var(--s3);padding-right:var(--s3)}.brand{gap:6px}}
 @media (max-width:480px){.detail dl{grid-template-columns:1fr;gap:0}.detail dd{margin-bottom:var(--s2)}}
 #device-status{padding:var(--s3) var(--s4);font-size:var(--fs-sm)}
+
+/* owner page: on a phone the decision comes first, then what just happened, then the day */
+.owner-main{display:flex;flex-direction:column}
+.owner-main > .pending{order:1}
+.owner-main > .happened{order:2;margin-top:var(--s4)}
+.owner-main > .today{order:3}
+.owner-page .page-head{margin:var(--s4) 0 0}
+.owner-page .pending h2{margin-top:var(--s4)}
+.owner-side #device-status{margin-top:var(--s5)}
+.result:empty{min-height:0;margin:0}
+
+/* the Today panel: the owner's day of money, from bookings and the ledger */
+.today{margin-top:var(--s5)}
+.today-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s2);flex-wrap:wrap}
+.today h2{margin:0}
+.today-head .hint{margin:0}
+.unsigned{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0 var(--s1);padding:var(--s3) var(--s4);border-radius:var(--radius-sm);font-weight:600}
+.unsigned .amount{font-size:var(--fs-2xl);font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.unsigned.ok{background:var(--ok-bg);color:var(--ok)} .unsigned.bad{background:var(--bad-bg);color:var(--bad)}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2);margin:var(--s3) 0 0}
+.tile{background:var(--surface-2);border-radius:var(--radius-sm);padding:var(--s3)}
+.tile.wide-tile{grid-column:1/-1}
+.tile dt{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.tile dd{margin:2px 0 0}
+.tile .num{font-size:var(--fs-xl);font-weight:800;font-variant-numeric:tabular-nums}
+.tile .sub{font-size:var(--fs-sm);color:var(--muted)}
+@media (min-width:560px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}.tile.wide-tile{grid-column:span 2}}
 .foot{color:var(--muted);font-size:var(--fs-sm);padding-top:var(--s4);padding-bottom:var(--s5);border-top:1px solid var(--line);margin-top:var(--s5)}
 .steps{padding-left:1.2em} .steps li{margin:var(--s2) 0}
 
@@ -171,4 +219,6 @@ table.plain th,table.plain td{border-bottom:1px solid var(--line);padding:var(--
   .split{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:var(--s5);align-items:start}
   .split > * h2:first-child,.split .meta:first-child{margin-top:0}
   .split .actions{grid-template-columns:1fr}
+  .owner-main > .happened{order:0;margin:var(--s5) 0 0}
+  .owner-side #device-status{margin-top:var(--s5)}
 }

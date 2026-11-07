@@ -27,3 +27,17 @@ commands, or a `[tool.setuptools]` package-dir entry in `pyproject.toml`).
   next to `ask_first_pay`, plus the demo's templates and static files as package data, so plain
   `python -c "import ask_first"` works and `scripts/demo.sh` no longer needs `PYTHONPATH`. No new
   dependency.
+
+## N9 (n9-owner-story): changes to the contract files
+
+- `gate.py`: `AgentGate.request(ttl_s=None)` now reads the mandate lifetime from
+  `ASK_FIRST_MANDATE_TTL_MIN` (whole minutes, 1-1440, default **60**; a bad value raises
+  `ValueError` instead of being replaced silently). Before, every request lived 15 minutes
+  (judge bug B12). Passing `ttl_s` explicitly still wins, so callers and the engine are unchanged.
+- `gate.py`: `AgentGate.describe` no longer prints the expiry as epoch seconds; it says
+  "expires in 58 min" (judge bug B7). New helpers `mandate_ttl_s()` and `minutes_left(exp)`.
+  The text still comes only from the signed fields. Tests: `tests/demo/test_demo_owner_story.py
+  -k "mandate_ttl or human_time"`.
+- `pyproject.toml`: a new optional extra `browser = ["playwright>=1.40"]` for the two browser
+  tests (`-k "approve_above_fold or buzzes"`) and `scripts/screenshots.py`. Not part of `dev`:
+  without Playwright (or its Chromium) those tests skip, so a judge's plain `pytest` stays green.

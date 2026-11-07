@@ -1,0 +1,13 @@
+{% if last %}
+<div id="happened" class="happened {{ last.tone }}" role="status" aria-live="polite">
+  <span class="tag">{{ {'ok': 'Done', 'bad': 'Refused', 'warn': 'Waiting', 'info': 'Info'}[last.tone] }}</span>
+  <div><span class="sr">What just happened: </span><strong>{{ last.label }}</strong>
+    <ul>{% for i in last['items'] %}<li>{{ i }}</li>{% endfor %}</ul></div>
+</div>
+{% else %}
+<div id="happened" class="happened info" role="status" aria-live="polite">
+  <span class="tag">Start</span>
+  <div><strong>Nothing has happened yet.</strong>
+    <ul><li>Pair the owner's phone on <a href="/owner">Owner</a>, then book in the <a href="/chat">chat</a> or press a scenario.</li></ul></div>
+</div>
+{% endif %}
