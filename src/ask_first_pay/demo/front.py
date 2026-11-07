@@ -92,12 +92,14 @@ class AgentFrontDesk:
     def say(self, text: str, who: str = "business", link: str | None = None, label: str | None = None):
         self.messages.append(Message(who, text, link, label))
 
-    def turn(self, message: str, state: AgentState | None = None) -> list[str]:
-        """One message to the agent; its replies go to the chat."""
+    def turn(self, message: str, state: AgentState | None = None, relay: bool = False) -> list[str]:
+        """One message to the agent; its replies go to the chat. `relay=True` only for the
+        server's own notes (below): customer text is never trusted as one, whatever it says."""
         state = state or self.state
         self.turns += 1
         start = len(state.messages)
-        _, replies = run_turn(state, message, gate=self.gate, desk=self.desk, model=self._models[id(state)])
+        _, replies = run_turn(state, message, gate=self.gate, desk=self.desk, model=self._models[id(state)],
+                              relay=relay)
         for r in replies:
             self.say(r)
         if replies:                                # the tool-call strip under the turn's last reply
@@ -138,7 +140,7 @@ class AgentFrontDesk:
         if not text:
             return
         state = state or self.state
-        name = customer_name(text) or conversation_name(state.messages) or self._booked_name(state)
+        name = customer_name(text) or conversation_name(state.messages, state.relays) or self._booked_name(state)
         self.messages.append(Message("customer", text, name=name))
         self.turn(text, state)
 
@@ -149,7 +151,7 @@ class AgentFrontDesk:
     def scenario_customer(self) -> str:
         """Who a scenario button speaks for: the current conversation's customer, or a new
         fictional one when that conversation has no name yet."""
-        known = conversation_name(self.state.messages) or self._booked_name(self.state)
+        known = conversation_name(self.state.messages, self.state.relays) or self._booked_name(self.state)
         if known and known != NO_NAME:
             return known
         n = sum(len(s.bookings) for s in self.conversations)
@@ -174,7 +176,7 @@ class AgentFrontDesk:
                 self.say(f"{source}: the customer approved the deposit on PayPal." if source
                          else "The customer approved the deposit on PayPal.", who="system")
                 self.turn(f"[payments] The customer approved PayPal order {order_id} for {b['id']}. "
-                          "Confirm the deposit hold.", s)
+                          "Confirm the deposit hold.", s, relay=True)
                 return
 
     def no_show(self, state: AgentState, booking_id: str, then_goodwill: bool = False) -> None:
@@ -182,7 +184,7 @@ class AgentFrontDesk:
         the customer writes in and asks for it back (V1's goodwill beat, from the customer's words)."""
         self.say(f"{slot_label(state.bookings[booking_id]['slot'])}: the customer did not show up.", who="system")
         before = set(state.mandates)
-        self.turn(f"[business] {booking_id} did not show up. Ask the owner to capture the deposit.", state)
+        self.turn(f"[business] {booking_id} did not show up. Ask the owner to capture the deposit.", state, relay=True)
         new = [m for m in state.mandates if m not in before and state.mandates[m]["action"] == "capture_deposit"]
         if then_goodwill and new:
             self.goodwill[new[-1]] = True
@@ -192,7 +194,7 @@ class AgentFrontDesk:
         if s is None:
             return
         self.say(f"The owner approved mandate {mandate_id[:8]} on their phone.", who="system")
-        self.turn(f"[owner] The owner approved mandate {mandate_id}. Execute it now.", s)
+        self.turn(f"[owner] The owner approved mandate {mandate_id}. Execute it now.", s, relay=True)
         goodwill = self.goodwill.pop(mandate_id, False)
         req = s.mandates[mandate_id]
         if goodwill and s.bookings[req["booking_id"]].get("capture_id"):
@@ -209,7 +211,7 @@ class AgentFrontDesk:
             self.gate.execute(mandate_id, req["action"], req["target"], req["amount"])
         except MandateRejected as e:
             self.say(f"The gate rejected {req['action']}: {e.reason}. The attempt is on the ledger.", who="system")
-        self.turn(f"[owner] The owner declined mandate {mandate_id}. Tell the customer.", s)
+        self.turn(f"[owner] The owner declined mandate {mandate_id}. Tell the customer.", s, relay=True)
 
     def replay_last(self) -> bool:
         """Try to use the last executed mandate a second time; the gate must say replay."""

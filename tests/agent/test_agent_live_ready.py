@@ -53,8 +53,8 @@ class PayPalWorld:
         self.state = AgentState()
         self.model = OfflineFrontDeskModel(self.state)
 
-    def say(self, message):
-        _, replies = run_turn(self.state, message, gate=self.gate, desk=self.desk, model=self.model)
+    def say(self, message, relay=False):
+        _, replies = run_turn(self.state, message, gate=self.gate, desk=self.desk, model=self.model, relay=relay)
         return replies
 
     def hold(self):
@@ -84,7 +84,7 @@ def test_agent_refresh_hold_definitive_error_marks_not_held_and_blocks_capture(t
     w = PayPalWorld(tmp_path)
     b = w.hold()
     w.mock.fail_next.append(error)
-    replies = w.say("[business] booking-1 did not show up. Ask the owner to capture the deposit.")
+    replies = w.say("[business] booking-1 did not show up. Ask the owner to capture the deposit.", relay=True)
     assert len(w.reauth_posts()) == 1
     assert b["status"] == "hold_ended"
     assert w.state.mandates == {} and w.owner.pending == {}           # nobody is asked to sign
@@ -101,7 +101,7 @@ def test_agent_refresh_hold_too_soon_in_paypal_format_is_not_definitive_and_keep
     w = PayPalWorld(tmp_path)
     b = w.hold()
     w.mock.fail_next.append(unprocessable("REAUTHORIZATION_TOO_SOON"))
-    w.say("[business] booking-1 did not show up. Ask the owner to capture the deposit.")
+    w.say("[business] booking-1 did not show up. Ask the owner to capture the deposit.", relay=True)
     assert b["status"] == "deposit_held" and b["authorization_id"] == "3C679366HH908993F"
     (mid,) = w.state.mandates
     assert w.owner.get(mid)["recipient"] == "3C679366HH908993F"
@@ -111,7 +111,7 @@ def test_agent_refresh_hold_transient_is_not_definitive_and_falls_back_to_the_cu
     w = PayPalWorld(tmp_path)
     b = w.hold()
     w.mock.fail_next.append(httpx.ConnectTimeout("no answer"))
-    w.say("[business] booking-1 did not show up. Ask the owner to capture the deposit.")
+    w.say("[business] booking-1 did not show up. Ask the owner to capture the deposit.", relay=True)
     assert b["status"] == "deposit_held" and len(w.state.mandates) == 1
 
 

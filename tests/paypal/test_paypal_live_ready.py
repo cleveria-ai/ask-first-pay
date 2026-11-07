@@ -88,7 +88,7 @@ def test_paypal_experience_context_brand_and_url_are_configurable(monkeypatch):
     p, mock = provider(brand_name="Clinica Sonrisa", public_url="http://127.0.0.1:9000")
     p.create_order(10.0, "USD", "b")
     ctx = json.loads(order_posts(mock)[0].content)["payment_source"]["paypal"]["experience_context"]
-    assert ctx["brand_name"] == "Clinica Sonrisa" and ctx["return_url"] == "http://127.0.0.1:9000/chat/return"
+    assert ctx["brand_name"] == "Clinica Sonrisa (fictional)" and ctx["return_url"] == "http://127.0.0.1:9000/chat/return"
     q, mock2 = provider()
     q.create_order(10.0, "USD", "b")
     ctx2 = json.loads(order_posts(mock2)[0].content)["payment_source"]["paypal"]["experience_context"]

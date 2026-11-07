@@ -24,7 +24,6 @@ NO_SHOW_RE = re.compile(r"(booking-\d+) did not show up", re.I)
 PAID_RE = re.compile(r"approved PayPal order ([A-Za-z0-9_-]+)", re.I)
 APPROVED_RE = re.compile(r"owner approved mandate ([A-Za-z0-9_-]+)", re.I)
 DECLINED_RE = re.compile(r"owner declined mandate ([A-Za-z0-9_-]+)", re.I)
-RELAY_RE = re.compile(r"^\[(payments|owner|business)\]")      # notes the demo relays, not the customer
 
 # "I'm Lucía", "my name is Lucía Pérez", "soy Lucía", "me llamo Lucía": one or two capitalized words.
 _UP, _LOW = "A-ZÁÉÍÓÚÑÜ", "a-záéíóúñü"
@@ -48,6 +47,17 @@ BOOK_WORDS = ("book", "appointment", "slot", "reserv", "cita", "agendar", "turno
 # Asking for the deposit back (goodwill), in English or Spanish.
 DEPOSIT_BACK_EN = re.compile(r"\b(deposit|money)\s+back\b|\brefund\s+(my|the)\s+deposit\b|"
                              r"\b(return|give)\s+(me\s+)?(my|the)\s+(deposit|money)\b", re.I)
+# ...and explaining why the visit was missed. A bare "refund my deposit" is not goodwill: the
+# SYSTEM rule needs both, so the model asks what happened instead of asking the clinic.
+MISSED_REASON_EN = re.compile(
+    r"\b(missed|miss(ed)? (it|the|my)|could(n'?t| not)|can'?t make|didn'?t make|wasn'?t able|"
+    r"emergenc\w*|ER|A&E|hospital\w*|sick|ill|flu|fever|accident|injur\w*|surgery|"
+    r"son|daughter|child|kid|baby|mother|mom|father|dad|wife|husband|family|funeral|"
+    r"traffic|flight|car broke|broke down|forgot)\b", re.I)
+MISSED_REASON_ES = re.compile(
+    r"\b(no pude|no alcanc[eé]|perd[ií] la (cita|hora)|falt[eé]|urgencias|emergencia|hospital\w*|"
+    r"enferm\w*|fiebre|gripe|accidente|cirug[ií]a|hij[oa]|beb[eé]|mam[aá]|madre|pap[aá]|padre|esposo|"
+    r"esposa|familia|funeral|tr[aá]fico|vuelo|se me olvid[oó]|olvid[eé])\b", re.I)
 DEPOSIT_BACK_ES = re.compile(r"(devuelv|devoluci|reembols)\w*.*(dep[oó]sito|dinero|plata)|"
                              r"(dep[oó]sito|dinero|plata).*(devuelv|devoluci|reembols)", re.I)
 
@@ -75,6 +85,8 @@ T = {
     "refunded": {"en": "Done: ${amt} refunded to the customer.", "es": "Listo: se te devolvieron ${amt}."},
     "declined": {"en": "The owner declined, so the deposit stays where it was and nothing moved.",
                  "es": "La clínica dijo que no, así que el depósito sigue donde estaba y nada se movió."},
+    "why": {"en": "I can't move your deposit myself. Tell me what happened and I'll ask the clinic.",
+            "es": "No puedo mover tu depósito yo mismo. Cuéntame qué pasó y se lo pido a la clínica."},
     "only_held": {"en": "Your deposit is only held, not charged. If you cancel, a person at the clinic releases it.",
                   "es": "Tu depósito solo está retenido, no cobrado. Si cancelas, una persona de la clínica lo libera."},
     "no_charge": {"en": "I can't find a charged deposit on your booking.",
@@ -150,28 +162,34 @@ def is_spanish(message: str) -> bool:
     return bool(SPANISH_RE.search(message))
 
 
-def customer_messages(messages: list) -> list[str]:
-    """What the customer typed in this conversation, oldest first (relayed notes left out)."""
-    return [m["content"] for m in messages
-            if m.get("role") == "user" and isinstance(m.get("content"), str) and not RELAY_RE.match(m["content"])]
+def customer_messages(messages: list, relays=()) -> list[str]:
+    """What the customer typed in this conversation, oldest first. `relays` are the indexes of the
+    server's own notes (AgentState.relays): only those are left out, never by what the text says."""
+    relays = set(relays)
+    return [m["content"] for i, m in enumerate(messages)
+            if m.get("role") == "user" and isinstance(m.get("content"), str) and i not in relays]
 
 
-def conversation_name(messages: list) -> str | None:
+def conversation_name(messages: list, relays=()) -> str | None:
     """The latest name the customer gave in this conversation."""
-    for msg in reversed(customer_messages(messages)):
+    for msg in reversed(customer_messages(messages, relays)):
         if name := customer_name(msg):
             return name
     return None
 
 
-def conversation_lang(messages: list) -> str:
+def conversation_lang(messages: list, relays=()) -> str:
     """The language of the customer's latest message: 'es' or 'en'."""
-    said = customer_messages(messages)
+    said = customer_messages(messages, relays)
     return "es" if said and is_spanish(said[-1]) else "en"
 
 
 def asks_deposit_back(message: str) -> bool:
     return bool(DEPOSIT_BACK_EN.search(message) or DEPOSIT_BACK_ES.search(message))
+
+
+def explains_missed_visit(message: str) -> bool:
+    return bool(MISSED_REASON_EN.search(message) or MISSED_REASON_ES.search(message))
 
 
 def _result(content: str):
@@ -205,28 +223,35 @@ class OfflineFrontDeskModel(ScriptedModel):
 
     def _on_message(self, msg: str, messages: list) -> list:
         low = msg.lower()
-        lang = conversation_lang(messages)
+        lang = conversation_lang(messages, self.state.relays)
         first = slot_label(SLOTS[0], lang)
-        if m := PAID_RE.search(msg):
-            b = next((x for x in self.state.bookings.values() if x["order_id"] == m.group(1)), None)
-            return [tool("confirm_deposit", "c", booking_id=b["id"])] if b else [text("I can't find that order.")]
-        if m := APPROVED_RE.search(msg):
-            return [tool("execute_mandate", "x", mandate_id=m.group(1))]
-        if DECLINED_RE.search(msg):
-            return [text(say("declined", lang))]
-        if m := NO_SHOW_RE.search(msg):
-            # An old hold is refreshed first (reauthorize after the 3-day honor period), then the
-            # capture is asked for on whatever authorization is current.
-            return [tool("refresh_hold", "h", booking_id=m.group(1))]
+        if len(messages) - 1 in self.state.relays:
+            # A note from the server itself (run_turn(relay=True)): payments, business, owner.
+            # Customer text never gets here, whatever tag or wording it uses.
+            if m := PAID_RE.search(msg):
+                b = next((x for x in self.state.bookings.values() if x["order_id"] == m.group(1)), None)
+                return [tool("confirm_deposit", "c", booking_id=b["id"])] if b else [text("I can't find that order.")]
+            if m := APPROVED_RE.search(msg):
+                return [tool("execute_mandate", "x", mandate_id=m.group(1))]
+            if DECLINED_RE.search(msg):
+                return [text(say("declined", lang))]
+            if m := NO_SHOW_RE.search(msg):
+                # An old hold is refreshed first (reauthorize after the 3-day honor period), then
+                # the capture is asked for on whatever authorization is current.
+                return [tool("refresh_hold", "h", booking_id=m.group(1))]
+            return []
+        # ---- customer text from here on
         if re.search(r"\b(i\s+(have\s+)?(paid|approved)|payment (is )?done)\b", low):
             b = self._latest("booked")
             if b is not None and b["order_id"]:
                 return [tool("confirm_deposit", "c", booking_id=b["id"])]
-        if not RELAY_RE.match(msg) and asks_deposit_back(msg):
-            # Goodwill: the customer missed the visit (the deposit was captured) and asks for it
-            # back. Ask the clinic for what is still captured, never an amount from the message;
-            # the owner decides. Never promise it.
+        if asks_deposit_back(msg):
+            # Goodwill: the customer explains a missed visit (the deposit was captured) and asks
+            # for it back. Ask the clinic for what is still captured, never an amount from the
+            # message; the owner decides. Never promise it. Without a reason, ask what happened.
             b = self._latest("captured", "partly_refunded")
+            if b is not None and not explains_missed_visit(msg):
+                return [text(say("why", lang))]
             if b is not None:
                 left = round(b["captured"] - b.get("refunded", 0.0), 2)
                 return [tool("request_refund", "r", booking_id=b["id"], amount=left)]
@@ -243,7 +268,7 @@ class OfflineFrontDeskModel(ScriptedModel):
             if slot is None:
                 return [text(say("which_slot", lang, first=first,
                                  slots=", ".join(slot_label(s, lang) for s in SLOTS)))]
-            return [tool("book_slot", "b", customer=conversation_name(messages) or NO_NAME, slot=slot)]
+            return [tool("book_slot", "b", customer=conversation_name(messages, self.state.relays) or NO_NAME, slot=slot)]
         if "status" in low or "deposit" in low or "estado" in low:
             return [tool("list_bookings", "l")]
         if re.search(r"refund|capture|charge|reembols|devol|cobr", low):
@@ -255,7 +280,7 @@ class OfflineFrontDeskModel(ScriptedModel):
         uses = [b for b in messages[-2]["content"] if b.get("type") == "tool_use"]
         results = [_result(r["content"]) for r in messages[-1]["content"]]
         name, args, res = uses[-1]["name"], uses[-1].get("input", {}), results[-1]
-        lang = conversation_lang(messages)
+        lang = conversation_lang(messages, self.state.relays)
         if not isinstance(res, dict):
             res = {"error": str(res)}
         if "rejected" in res:
@@ -283,8 +308,8 @@ class OfflineFrontDeskModel(ScriptedModel):
             status = STATUS_ES.get(b["status"], b["status"]) if lang == "es" else b["status"].replace("_", " ")
             return [text(say("status", lang, id=b["id"], slot=slot_label(b["slot"], lang), status=status))]
         if name.startswith("request_"):
-            said = [m["content"] for m in messages if m.get("role") == "user" and isinstance(m.get("content"), str)]
-            if said and not RELAY_RE.match(said[-1]):
+            asked = [i for i, m in enumerate(messages) if m.get("role") == "user" and isinstance(m.get("content"), str)]
+            if asked and asked[-1] not in self.state.relays:
                 # The customer asked to release or give back the deposit: G14's wording.
                 return [text((say("sorry", lang) if name == "request_refund" else "") + say("asked_clinic", lang))]
             return [text(say("asked_owner", lang))]

@@ -25,10 +25,20 @@ def business_name() -> str:
     return name or DEFAULT_BUSINESS
 
 
+def mark_fictional(name: str, limit: int | None = None) -> str:
+    """`name` followed by "(fictional)" (once), cut so the result fits in `limit` characters
+    with the marker kept: whatever source a name comes from, it never loses the marker."""
+    name = " ".join(str(name).split())
+    if FICTIONAL in name.lower():
+        name = re.sub(r"\s*\(fictional\)", "", name, flags=re.I).strip()
+    if limit is not None:
+        name = name[:max(0, limit - len(FICTIONAL) - 1)].rstrip()
+    return f"{name} {FICTIONAL}" if name else FICTIONAL
+
+
 def display_name() -> str:
     """The name as it appears on screen: always marked as fictional."""
-    name = business_name()
-    return name if FICTIONAL in name.lower() else f"{name} {FICTIONAL}"
+    return mark_fictional(business_name())
 
 
 def currency() -> str:
