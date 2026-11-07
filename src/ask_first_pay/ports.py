@@ -76,7 +76,12 @@ class PaymentProvider(Protocol):
     """Money moves only on capture, refund and void, and those are reachable only through the
     mandate gate (gate.py). Everything else holds or describes money."""
 
-    def create_order(self, amount: float, currency: str, reference: str) -> Order: ...
+    def create_order(self, amount: float, currency: str, reference: str,
+                     request_id: str | None = None) -> Order:
+        """`request_id` is the order's own idempotency key (PayPal-Request-Id): unique per order,
+        stored by the caller so a retry of the SAME order creation sends it again. None means a
+        fresh random id (never one derived from `reference`, which repeats across conversations)."""
+        ...
 
     def authorize(self, order_id: str) -> Authorization: ...
 

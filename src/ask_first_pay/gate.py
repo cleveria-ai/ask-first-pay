@@ -107,8 +107,8 @@ class HoldDesk:
     def __setattr__(self, name, value):
         raise AttributeError("HoldDesk is read-only")
 
-    def create_order(self, amount: float, currency: str, reference: str):
-        return self._p.create_order(amount, currency, reference)
+    def create_order(self, amount: float, currency: str, reference: str, request_id: str | None = None):
+        return self._p.create_order(amount, currency, reference, request_id=request_id)
 
     def authorize(self, order_id: str):
         return self._p.authorize(order_id)

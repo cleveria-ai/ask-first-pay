@@ -84,7 +84,7 @@ def tracked():
 def test_no_env_file_key_material_or_secret_literals_are_tracked():
     files = tracked()
     assert not [f for f in files if re.search(r"(^|/)\.env|\.pem$|\.key$|id_rsa|\.p12$|\.sqlite|\.jsonl$", f)], files
-    pat = re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}|(client_secret|PAYPAL_CLIENT_SECRET)\s*=\s*['\"][A-Za-z0-9_-]{12,}|-----BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|EA[A-Za-z0-9_-]{40,}")
+    pat = re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}|(client_secret|PAYPAL_CLIENT_SECRET)\s*=\s*['\"][A-Za-z0-9_-]{12,}|-----BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|(?<![A-Za-z0-9_-])EA[A-Za-z0-9_-]{40,}")   # standalone: "REAUTHORIZATION_..." is not a token
     hits = []
     for f in files:
         p = ROOT / f
