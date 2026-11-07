@@ -349,3 +349,113 @@ def test_video_safe_on_shows_no_third_party_brand_but_paypal(demo, monkeypatch, 
             assert brand not in text, (path, brand)
     assert "PayPal" in shown["/chat"] and "PayPal" in shown["/owner"]
     assert "Tap a row for its signed fields" in shown["/owner"]          # the help stays, only the brand goes
+
+
+# ---- review fixes (codex, after the N8 merge) -----------------------------------------------------
+TWO_DAYS = 2 * 24 * 3600
+
+
+def test_today_panel_counts_only_the_shops_local_day(demo, monkeypatch):
+    monkeypatch.setenv("ASK_FIRST_TZ", "America/Mexico_City")
+    demo.client.post("/scenario/no_show")
+    (j,) = demo.pending_ids(); demo.approve(j)
+    m = demo.state.engine.approved[j]["mandate"]
+    old = int(time.time()) - TWO_DAYS
+    # a signed capture and a refusal from two days ago are on the ledger, but not in Today
+    demo.state.engine.ledger.append({"ts": old, "mandate_id": j, "result": "executed", "reason": None,
+                                     "action": "capture_deposit", "recipient": m["recipient"], "amount": 10.0})
+    demo.state.engine.ledger.append({"ts": old, "mandate_id": j, "result": "rejected", "reason": "replay"})
+    t = demo.state.today()
+    assert t["kept"] == "$10.00" and t["refused"] == 0 and t["unsigned"] == "$0.00" and t["clean"]
+    assert t["bookings"] == 1 and t["orders"] == 1 and t["holds"] == 1
+    # a booking made two days ago leaves Today, with the PayPal calls the agent made for it
+    (booking,) = [b for s in demo.state.front.conversations for b in s.bookings.values()]
+    booking["created_at"] = datetime.fromtimestamp(old, timezone.utc).isoformat()
+    t = demo.state.today()
+    assert (t["bookings"], t["orders"], t["holds"], t["reauthorizations"], t["agent_calls"]) == (0, 0, 0, 0, 0)
+    # tomorrow nothing of this is "today"
+    tomorrow = owner_view.today(demo.state, now=time.time() + TWO_DAYS)
+    assert (tomorrow["kept"], tomorrow["approvals"], tomorrow["taps"]) == ("$0.00", 0, 0)
+    assert "Today " + t["day"] in today_text(demo.client.get("/owner").text)
+
+
+def test_today_panel_counts_an_undated_booking_and_says_so(demo):
+    demo.client.post("/scenario/no_show")
+    (booking,) = [b for s in demo.state.front.conversations for b in s.bookings.values()]
+    assert booking["created_at"]                                         # book_slot writes it
+    del booking["created_at"]                                            # as saved before N9
+    t = demo.state.today()
+    assert t["bookings"] == 1 and t["undated_bookings"] == 1
+    assert "Includes 1 booking with no recorded date." in today_text(demo.client.get("/owner").text)
+
+
+def test_today_panel_an_unknown_action_counts_its_whole_amount_as_unsigned(demo):
+    demo.client.post("/scenario/no_show")
+    (j,) = demo.pending_ids(); demo.approve(j)
+    m = demo.state.engine.approved[j]["mandate"]
+    demo.state.engine.ledger.append({"ts": int(time.time()), "mandate_id": j, "result": "executed", "reason": None,
+                                     "action": "sweep_deposit", "recipient": m["recipient"], "amount": 5.0})
+    t = demo.state.today()
+    assert t["unsigned"] == "$5.00" and t["unsigned_rows"] == 1 and not t["clean"]
+
+
+def test_today_panel_an_approval_filed_under_another_mandate_id_is_unsigned(demo):
+    demo.client.post("/scenario/no_show")
+    (j,) = demo.pending_ids(); demo.approve(j)
+    approval = demo.state.engine.approved[j]
+    demo.state.engine.approved["someone-elses-id"] = dict(approval)      # a valid signature, wrong jti
+    demo.state.engine.ledger.append({"ts": int(time.time()), "mandate_id": "someone-elses-id", "result": "executed",
+                                     "reason": None, "action": "capture_deposit",
+                                     "recipient": approval["mandate"]["recipient"], "amount": 10.0})
+    t = demo.state.today()
+    assert t["unsigned"] == "$10.00" and t["unsigned_rows"] == 1
+
+
+def test_today_panel_unsigned_money_from_an_earlier_day_still_shows(demo):
+    demo.client.post("/scenario/no_show")
+    (j,) = demo.pending_ids(); demo.approve(j)
+    auth = demo.state.owner.get(j)["recipient"]
+    demo.state.engine.ledger.append({"ts": int(time.time()) - TWO_DAYS, "mandate_id": "x", "result": "executed",
+                                     "reason": None, "action": "refund_deposit", "recipient": auth, "amount": 3.0})
+    page = demo.client.get("/owner").text
+    shown = today_text(page)
+    assert "$0.00 moved without your signature" in shown                 # today itself is clean
+    assert "And before today: $3.00 moved without your signature (1 row)." in shown
+    assert 'class="unsigned bad"' in page
+
+
+def test_owner_buzz_poll_endpoint_returns_two_counters_and_no_mandate_bytes(demo):
+    assert demo.client.get("/owner/api/pending").json() == {"waiting": 0, "asked": 0}
+    demo.client.post("/scenario/no_show")
+    (j,) = demo.pending_ids()
+    m = demo.state.owner.get(j)
+    r = demo.client.get("/owner/api/pending")
+    assert r.json() == {"waiting": 1, "asked": 1} and r.headers["cache-control"] == "no-store"
+    for secret in (j, j[:8], m["recipient"], "AUTH-", "10.00", "10.0", "capture", "plan_hash", m["plan_hash"]):
+        assert secret not in r.text, secret
+    demo.approve(j)
+    assert demo.client.get("/owner/api/pending").json() == {"waiting": 0, "asked": 1}
+    demo.client.post("/scenario/cancel")
+    (k,) = demo.pending_ids(); demo.decline(k)
+    assert demo.client.get("/owner/api/pending").json() == {"waiting": 0, "asked": 2}
+    # the page polls the minimal endpoint, never the full mandate list
+    page = demo.client.get("/owner").text
+    assert 'data-poll="/owner/api/pending" data-asked="2"' in page
+    js = open(owner_view.__file__.rsplit("/", 1)[0] + "/static/owner.js", encoding="utf-8").read()
+    assert "/owner/api/mandates" not in js and "j.asked" in js and "j.mandates" not in js
+
+
+def test_owner_card_human_time_with_an_unknown_zone_says_utc(demo, monkeypatch, capsys, tmp_path):
+    monkeypatch.setenv("ASK_FIRST_TZ", "Mars/Olympus_Mons")
+    tz, note = owner_view.zone_status()
+    assert tz is timezone.utc and note == "Times in UTC: ASK_FIRST_TZ='Mars/Olympus_Mons' is not a known time zone."
+    monday = datetime(2026, 11, 16, 15, 12, tzinfo=timezone.utc).timestamp()
+    assert owner_view.clock(monday) == "Mon 3:12 p.m."                  # UTC, not the server's zone
+    demo.client.post("/scenario/no_show")
+    page = demo.client.get("/owner").text
+    assert note in text_of(page[page.index('id="zone-note"') - 40:page.index("</p>", page.index('id="zone-note"'))])
+    (tmp_path / "second").mkdir()
+    Demo(tmp_path / "second")                                            # create_app warns at startup
+    assert note in capsys.readouterr().out
+    monkeypatch.setenv("ASK_FIRST_TZ", "America/Mexico_City")
+    assert owner_view.zone_status()[1] == "" and 'id="zone-note"' not in demo.client.get("/owner").text

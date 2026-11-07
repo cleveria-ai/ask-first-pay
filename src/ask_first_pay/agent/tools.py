@@ -6,6 +6,7 @@ unchanged request back to the gate, and the gate runs it only if the owner appro
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 from ask_first import MandateRejected
 
@@ -92,7 +93,9 @@ class Toolbox:
         bid = f"booking-{len(self.s.bookings) + 1}"
         self.s.bookings[bid] = {"id": bid, "customer": customer, "slot": slot, "status": "booked",
                                 "deposit": DEPOSIT, "order_id": None, "authorization_id": None,
-                                "capture_id": None, "captured": 0.0, "refunded": 0.0}
+                                "capture_id": None, "captured": 0.0, "refunded": 0.0,
+                                # when it was booked (UTC): the owner's Today panel counts by day
+                                "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
         return {"booking_id": bid, "slot": slot, "deposit": DEPOSIT}
 
     def t_create_deposit_order(self, booking_id: str) -> dict:

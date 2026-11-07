@@ -375,6 +375,17 @@ class DemoState:
     def today(self) -> dict:
         return owner_view.today(self)
 
+    def pending_signal(self) -> dict:
+        """All the phone's poll needs to buzz: how many requests wait for the owner now, and how
+        many the agent has ever asked for (a counter that only grows). No ids, no PayPal
+        resources, no amounts, no signed bytes: the card itself is rendered by /owner."""
+        now, waiting = int(time.time()), 0
+        for jti in list(self.owner.pending):
+            m = self.owner.get(jti)
+            if m and m["_state"] == "pending" and jti not in self.declined and now <= int(m["exp"]):
+                waiting += 1
+        return {"waiting": waiting, "asked": len(self.owner.pending)}
+
     def approve(self, mandate_id: str, signature: str) -> None:
         """Only a mandate still waiting can be approved: a decline is final, and approving twice
         is refused instead of silently answering ok."""
@@ -467,6 +478,8 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     """`model_factory(conversation_state) -> model`; default: Claude with a key, else offline."""
     state = DemoState(provider if provider is not None else default_provider(), ledger_path, model_factory,
                       store if store is not None else default_store())
+    if (zone_note := owner_view.zone_status()[1]):
+        print(f"[demo] {zone_note} The owner page says so too.")
     app = FastAPI(title="Ask First Pay demo")
     app.state.demo = state
 
@@ -612,7 +625,13 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     def owner(request: Request):
         rows = state.mandate_rows()
         return page(request, "owner.html", nav="owner", rows=rows, today=state.today(),
-                    pending=[r for r in rows if r["state"] == "pending"], paired=state.paired_key)
+                    pending=[r for r in rows if r["state"] == "pending"], paired=state.paired_key,
+                    signal=state.pending_signal())
+
+    @app.get("/owner/api/pending")
+    def owner_pending_signal():
+        """What owner.js polls every few seconds (see DemoState.pending_signal)."""
+        return JSONResponse(state.pending_signal(), headers={"Cache-Control": "no-store"})
 
     @app.get("/owner/api/mandates")
     def owner_api():

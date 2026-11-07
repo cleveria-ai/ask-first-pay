@@ -95,13 +95,11 @@
     });
   }
 
-  /* The phone buzzes: poll the pending mandates; a new one vibrates the phone (where the browser
+  /* The phone buzzes: poll /owner/api/pending (two counters); a new request vibrates the phone (where the browser
      allows it) and puts "(1)" in the tab title. Nothing here can approve: that still needs a tap. */
   var list = $('#pending-list'), bar = $('#new-request');
   var BASE_TITLE = document.title, BADGE = 'ask-first-badge';
-  var shown = {};
-  document.querySelectorAll('.mandate[data-id]').forEach(function (li) { shown[li.getAttribute('data-id')] = 1; });
-  var seen = Object.assign({}, shown), unseen = 0;
+  var asked = Number(list ? list.getAttribute('data-asked') : 0) || 0, unseen = 0;
   function badge(n) {                         /* carried over the reload that shows the new card */
     unseen = n;
     document.title = n > 0 ? '(' + n + ') ' + BASE_TITLE : BASE_TITLE;
@@ -117,18 +115,19 @@
 
   function poll() {
     if (!list) return;
+    /* the poll answers two numbers only (waiting now, asked ever): no ids, amounts or bytes */
     fetch(list.getAttribute('data-poll'), {headers: {'Accept': 'application/json'}, cache: 'no-store'})
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
-        if (!j || !j.mandates) return;
-        var fresh = j.mandates.filter(function (m) { return m.state === 'pending' && !seen[m.id]; });
-        if (!fresh.length) return;
-        fresh.forEach(function (m) { seen[m.id] = 1; });
+        if (!j || typeof j.asked !== 'number' || typeof j.waiting !== 'number') return;
+        var fresh = j.asked - asked;
+        if (fresh <= 0) return;
+        asked = j.asked;
+        if (j.waiting <= 0) return;           /* asked and already gone (declined, expired) */
         if (navigator.vibrate) { try { navigator.vibrate([180, 90, 180]); } catch (e) { /* not allowed yet */ } }
-        var waiting = j.mandates.filter(function (m) { return m.state === 'pending' && !shown[m.id]; }).length;
-        badge(unseen + fresh.length);
+        badge(unseen + fresh);
         if (busyNow()) {                      /* never pull the page from under a tap */
-          bar.textContent = waiting === 1 ? 'A new request arrived · show it' : waiting + ' new requests · show them';
+          bar.textContent = unseen === 1 ? 'A new request arrived · show it' : unseen + ' new requests · show them';
           bar.hidden = false;
         } else {
           location.reload();                  /* the server renders the card from the signed fields */

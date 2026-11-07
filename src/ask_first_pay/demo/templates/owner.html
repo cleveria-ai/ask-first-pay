@@ -6,6 +6,7 @@
 <div class="page-head">
   <h1>Owner approvals</h1>
   <p>Your phone. The agent can hold a deposit; only your tap moves it.</p>
+  {% if today.zone_note %}<p class="zone-note" id="zone-note" role="note">{{ today.zone_note }}</p>{% endif %}
 </div>
 
 {% if not paired %}
@@ -28,7 +29,7 @@
 <section aria-labelledby="pending-h" class="pending">
   <h2 id="pending-h">Waiting for you <span class="count" id="pending-count">{{ pending|length }}</span><span class="sr"> ({{ pending|length }})</span></h2>
   <button type="button" class="new-request" id="new-request" hidden>A new request arrived · show it</button>
-  <ul class="pending-list" id="pending-list" data-poll="/owner/api/mandates">
+  <ul class="pending-list" id="pending-list" data-poll="/owner/api/pending" data-asked="{{ signal.asked }}">
   {% for r in pending %}
     <li class="card mandate act-{{ r.action }}" data-id="{{ r.id }}" data-canonical="{{ r.canonical }}">
       <div class="mandate-top">
@@ -67,12 +68,13 @@
 
 <section aria-labelledby="today-h" class="card today" id="today">
   <div class="today-head">
-    <h2 id="today-h">Today</h2>
+    <h2 id="today-h">Today <span class="today-day">{{ today.day }}</span></h2>
     <span class="hint">from the bookings and the ledger</span>
   </div>
   <p class="unsigned {{ 'ok' if today.clean else 'bad' }}" id="unsigned-line"><span class="amount">{{ today.unsigned }}</span> moved without your signature</p>
   <p class="hint" id="today-check">{% if today.chain_ok and not today.rows %}Nothing has moved yet: the ledger is empty.{% elif today.chain_ok %}Checked against all {{ today.rows }} ledger {{ 'row' if today.rows == 1 else 'rows' }}; chain intact.{% else %}The ledger chain is BROKEN: do not trust these numbers.{% endif %}
     {% if today.unsigned_rows %}{{ today.unsigned_rows }} executed {{ 'row has' if today.unsigned_rows == 1 else 'rows have' }} no valid signature of yours.{% endif %}</p>
+  {% if today.unsigned_rows_before %}<p class="unsigned-before" id="unsigned-before">And before today: {{ today.unsigned_before }} moved without your signature ({{ today.unsigned_rows_before }} {{ 'row' if today.unsigned_rows_before == 1 else 'rows' }}).</p>{% endif %}
   <dl class="tiles">
     <div class="tile wide-tile"><dt>The agent, on its own</dt>
       <dd><span class="num">{{ today.agent_calls }}</span> PayPal {{ 'call' if today.agent_calls == 1 else 'calls' }} · $0.00 moved</dd>
@@ -86,6 +88,7 @@
     <div class="tile"><dt>Refused</dt><dd><span class="num">{{ today.refused }}</span></dd>
       {% if today.refused_reasons %}<dd class="sub">{{ today.refused_reasons }}</dd>{% endif %}</div>
   </dl>
+  {% if today.undated_bookings or today.undated_rows %}<p class="hint" id="today-undated">Includes {% if today.undated_bookings %}{{ today.undated_bookings }} {{ 'booking' if today.undated_bookings == 1 else 'bookings' }}{% endif %}{% if today.undated_bookings and today.undated_rows %} and {% endif %}{% if today.undated_rows %}{{ today.undated_rows }} ledger {{ 'row' if today.undated_rows == 1 else 'rows' }}{% endif %} with no recorded date.</p>{% endif %}
   {% if today.failed %}<p class="hint">{{ today.failed }} approved {{ 'action' if today.failed == 1 else 'actions' }} failed at PayPal (spent, not retried).</p>{% endif %}
 </section>
 </div>

@@ -200,6 +200,9 @@ table.plain th,table.plain td{border-bottom:1px solid var(--line);padding:var(--
 .today{margin-top:var(--s5)}
 .today-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s2);flex-wrap:wrap}
 .today h2{margin:0}
+.today-day{font-size:var(--fs-sm);font-weight:600;color:var(--muted);margin-left:var(--s1)}
+.unsigned-before{margin:var(--s2) 0;padding:var(--s2) var(--s3);border-radius:var(--radius-sm);background:var(--bad-bg);color:var(--bad);font-weight:600;font-size:var(--fs-sm)}
+.zone-note{margin:var(--s2) 0 0;padding:var(--s1) var(--s3);border-radius:var(--radius-sm);background:var(--warn-bg);color:var(--warn);font-size:var(--fs-sm);font-weight:600}
 .today-head .hint{margin:0}
 .unsigned{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0 var(--s1);padding:var(--s3) var(--s4);border-radius:var(--radius-sm);font-weight:600}
 .unsigned .amount{font-size:var(--fs-2xl);font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}

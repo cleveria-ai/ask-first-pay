@@ -8,28 +8,40 @@ from __future__ import annotations
 
 import ast
 import os
-from datetime import datetime, tzinfo
+import time
+import math
+from datetime import datetime, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ask_first.keys import public_key_from_hex, verify_signature
 
 from ..gate import minutes_left
 
-MOVES_MONEY = ("capture_deposit", "refund_deposit")      # a void releases a hold: it moves nothing
+RELEASES_ONLY = "void_deposit"     # a void releases a hold: its 0.01 cap is symbolic, it moves nothing
 KICKER = {"capture_deposit": "No-show", "void_deposit": "Cancellation", "refund_deposit": "Goodwill"}
 PAYPAL_RESULT = {"capture_deposit": ("capture_id", "PayPal capture id"),
                  "refund_deposit": ("refund_id", "PayPal refund id"),
                  "void_deposit": ("authorization_id", "PayPal authorization")}
 
 
-def local_zone() -> tzinfo | None:
+def zone_status() -> tuple[tzinfo | None, str]:
+    """(zone, note). ASK_FIRST_TZ names the shop's IANA zone; unset means the server's own zone.
+    An unknown name is never guessed around: times switch to UTC and the note says so on screen."""
     name = os.environ.get("ASK_FIRST_TZ", "").strip()
-    if name:
-        try:
-            return ZoneInfo(name)
-        except (ZoneInfoNotFoundError, ValueError):
-            pass
-    return None                                          # datetime.fromtimestamp: the server's zone
+    if not name:
+        return None, ""                                  # datetime.fromtimestamp: the server's zone
+    try:
+        return ZoneInfo(name), ""
+    except (ZoneInfoNotFoundError, ValueError):
+        return timezone.utc, f"Times in UTC: ASK_FIRST_TZ={name!r} is not a known time zone."
+
+
+def local_zone() -> tzinfo | None:
+    return zone_status()[0]
+
+
+def local_day(ts: float):
+    return datetime.fromtimestamp(float(ts), local_zone()).date()
 
 
 def _ampm(dt: datetime) -> str:
@@ -114,12 +126,29 @@ def paypal_text(found: dict | None) -> str:
 
 
 # ---- the Today panel -------------------------------------------------------------------------------
-def _agent_reauthorizations(front) -> int:
-    """refresh_hold calls that reached PayPal, counted from the results our own tool code wrote
-    (never from the model's words). A call refused before PayPal ("error") does not count."""
+def _booking_day(b: dict):
+    """The local day a booking was made (`created_at`, UTC ISO, written by book_slot), or None
+    for a booking saved before that field existed."""
+    raw = b.get("created_at")
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(local_zone()).date()          # None: the server's zone, as local_day
+
+
+def _agent_reauthorizations(front, counted: set) -> int:
+    """refresh_hold calls that reached PayPal for the bookings in `counted` (conversation index,
+    booking id), read from the results our own tool code wrote (never from the model's words).
+    Reached PayPal: "refreshed" (an answer or a timeout), a definitive refusal (N8: deposit_held
+    False) or any provider_error. Refused before PayPal ("no held deposit") does not count."""
     n = 0
-    for s in front.conversations:
-        names = {}
+    for i, s in enumerate(front.conversations):
+        uses = {}
         for msg in s.messages:
             content = msg.get("content")
             if not isinstance(content, list):
@@ -128,38 +157,59 @@ def _agent_reauthorizations(front) -> int:
                 if not isinstance(blk, dict):
                     continue
                 if blk.get("type") == "tool_use":
-                    names[blk.get("id")] = blk.get("name")
-                elif blk.get("type") == "tool_result" and names.get(blk.get("tool_use_id")) == "refresh_hold":
+                    uses[blk.get("id")] = blk
+                elif blk.get("type") == "tool_result":
+                    use = uses.get(blk.get("tool_use_id")) or {}
+                    if use.get("name") != "refresh_hold":
+                        continue
+                    if (i, str((use.get("input") or {}).get("booking_id", ""))) not in counted:
+                        continue
                     try:
                         out = ast.literal_eval(str(blk.get("content", "")))
                     except (ValueError, SyntaxError):
                         continue
-                    # N8 (B3): "refreshed" (answered or transient) or a definitive refusal, which
-                    # also reached PayPal and comes back with deposit_held False.
-                    if isinstance(out, dict) and ("refreshed" in out or out.get("deposit_held") is False):
+                    if isinstance(out, dict) and ("refreshed" in out or "provider_error" in out
+                                                  or out.get("deposit_held") is False):
                         n += 1
     return n
 
 
+def _amount(row: dict) -> float | None:
+    try:
+        a = float(row.get("amount") or 0)
+    except (TypeError, ValueError):
+        return None
+    return a if math.isfinite(a) else None
+
+
 def _signed(row: dict, approved: dict, keys: list) -> bool:
-    """Did the owner sign what this executed ledger row did? The approval must exist, its
-    signature must verify over the stored mandate with a key this shop paired, and the row must
-    stay inside it (same action, same PayPal resource, amount within the cap)."""
-    a = approved.get(str(row.get("mandate_id", "")))
-    if not a:
+    """Did the owner sign exactly what this executed ledger row did? ALL of: an approval stored
+    for the row's mandate id, whose mandate carries that same jti; a valid Ed25519 signature over
+    it from a key this shop paired; the same action and PayPal resource; amount within the cap."""
+    mid = str(row.get("mandate_id", ""))
+    a = approved.get(mid)
+    if not mid or not isinstance(a, dict):
         return False
     m, sig = a.get("mandate") or {}, a.get("signature") or ""
-    if not any(verify_signature(k, m, sig) for k in keys):
+    if m.get("jti") != mid:
         return False
+    amount = _amount(row)
     try:
-        within = float(row.get("amount", 0)) <= float(m.get("cap", 0)) + 1e-9
+        cap = float(m.get("cap"))
     except (TypeError, ValueError):
         return False
-    return row.get("action") == m.get("action") and row.get("recipient") == m.get("recipient") and within
+    if amount is None or not math.isfinite(cap) or amount > cap + 1e-9:
+        return False
+    if row.get("action") != m.get("action") or row.get("recipient") != m.get("recipient"):
+        return False
+    return any(verify_signature(k, m, sig) for k in keys)
 
 
-def today(demo) -> dict:
-    """The owner's day of money, computed from bookings and the ledger."""
+def today(demo, now: float | None = None) -> dict:
+    """The owner's day of money: ledger rows and bookings of the shop's local calendar day
+    (ASK_FIRST_TZ), computed from bookings and the ledger. Money moved without a signature is
+    also checked on EVERY earlier row, so it cannot hide in yesterday."""
+    day = local_day(time.time() if now is None else now)
     led = demo.agent.view_ledger()
     entries = [e for e in led["entries"] if "_unreadable" not in e]
     unreadable = len(led["entries"]) - len(entries)
@@ -171,39 +221,70 @@ def today(demo) -> dict:
             continue
     approved = demo.engine.approved
 
-    kept = given_back = released = unsigned = 0.0
-    unsigned_rows = refused = failed = 0
+    kept = given_back = released = unsigned = unsigned_before = 0.0
+    unsigned_rows = unsigned_rows_before = refused = failed = undated_rows = 0
     reasons: dict[str, int] = {}
     held_by_auth = {b.get("authorization_id"): float(b.get("deposit") or 0) for b in bookings(demo.front)}
     for e in entries:
         result, action = e.get("result"), e.get("action")
+        ts = e.get("ts")
+        if isinstance(ts, (int, float)) and not isinstance(ts, bool):
+            is_today = local_day(ts) == day
+        else:
+            is_today, undated_rows = True, undated_rows + 1     # no date: counted, and the panel says so
         if result == "executed":
-            amount = float(e.get("amount") or 0)
+            amount = _amount(e)
             if not _signed(e, approved, keys):
-                unsigned_rows += 1
-                if action in MOVES_MONEY:
-                    unsigned += amount
+                # Every unsigned row counts. Only an exact void_deposit is known to move no money;
+                # any other action (or an unknown one) counts its whole positive amount.
+                moved = 0.0 if action == RELEASES_ONLY else max(amount or 0.0, 0.0)
+                if is_today:
+                    unsigned_rows += 1
+                    unsigned += moved
+                else:
+                    unsigned_rows_before += 1
+                    unsigned_before += moved
+            if not is_today or amount is None:
+                continue
             if action == "capture_deposit":
                 kept += amount
             elif action == "refund_deposit":
                 given_back += amount
-            elif action == "void_deposit":
+            elif action == RELEASES_ONLY:
                 released += held_by_auth.get(e.get("recipient"), 0.0)
+        elif not is_today:
+            continue
         elif result == "rejected":
             refused += 1
             reasons[e.get("reason") or "rejected"] = reasons.get(e.get("reason") or "rejected", 0) + 1
         elif result == "failed":
             failed += 1
 
-    bs = bookings(demo.front)
+    counted, undated_bookings, bs = set(), 0, []
+    for i, s in enumerate(demo.front.conversations):
+        for bid, b in s.bookings.items():
+            d = _booking_day(b)
+            if d is None:
+                undated_bookings += 1           # saved before bookings carried a date: counted
+            elif d != day:
+                continue
+            counted.add((i, str(bid)))
+            bs.append(b)
     orders = sum(1 for b in bs if b.get("order_id"))
     holds = sum(1 for b in bs if b.get("authorization_id"))
-    reauth = _agent_reauthorizations(demo.front)
-    approvals, declines = len(approved), len(demo.declined)   # a decline is only possible while pending
+    reauth = _agent_reauthorizations(demo.front, counted)
+
+    def asked_today(jti: str) -> bool:
+        m = demo.owner.get(jti) or {}
+        return isinstance(m.get("created"), (int, float)) and local_day(m["created"]) == day
+    approvals = sum(1 for jti in approved if asked_today(jti))
+    declines = sum(1 for jti in demo.declined if asked_today(jti))   # a decline is only possible while pending
     v = demo.ledger_rows()[1]                                        # includes the remembered head
     chain_ok = (v["ok"] or (v["empty"] and demo.ledger_head is None)) and unreadable == 0
+    _, zone_note = zone_status()
     return {
-        "bookings": len(bs),
+        "day": f"{day:%a} {day.day} {day:%b}", "zone_note": zone_note,
+        "bookings": len(bs), "undated_bookings": undated_bookings, "undated_rows": undated_rows,
         "orders": orders, "holds": holds, "reauthorizations": reauth,
         "agent_calls": orders + holds + reauth,
         "approvals": approvals, "declines": declines, "taps": approvals + declines,
@@ -211,5 +292,7 @@ def today(demo) -> dict:
         "refused": refused, "failed": failed,
         "refused_reasons": ", ".join(f"{k.replace('_', ' ')} {n}" for k, n in sorted(reasons.items())),
         "unsigned": money(unsigned), "unsigned_rows": unsigned_rows,
-        "clean": unsigned_rows == 0 and chain_ok, "chain_ok": chain_ok, "rows": len(led["entries"]),
+        "unsigned_before": money(unsigned_before), "unsigned_rows_before": unsigned_rows_before,
+        "clean": unsigned_rows == 0 and unsigned_rows_before == 0 and chain_ok, "chain_ok": chain_ok,
+        "rows": len(led["entries"]),
     }
