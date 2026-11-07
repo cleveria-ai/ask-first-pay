@@ -134,7 +134,9 @@ def _agent_reauthorizations(front) -> int:
                         out = ast.literal_eval(str(blk.get("content", "")))
                     except (ValueError, SyntaxError):
                         continue
-                    if isinstance(out, dict) and ("refreshed" in out or "provider_error" in out):
+                    # N8 (B3): "refreshed" (answered or transient) or a definitive refusal, which
+                    # also reached PayPal and comes back with deposit_held False.
+                    if isinstance(out, dict) and ("refreshed" in out or out.get("deposit_held") is False):
                         n += 1
     return n
 

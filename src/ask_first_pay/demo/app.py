@@ -7,6 +7,7 @@ the owner page gets `OwnerSide`. Nothing in this package calls the provider's mo
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import threading
 import time
@@ -43,6 +44,7 @@ PAIRING_TTL_S = 3600
 STATE_TONE = {"pending": "warn", "approved": "info", "used": "ok", "declined": "bad", "expired": "neutral"}
 SIGNED_FIELDS = ("jti", "iss", "sub", "action", "recipient", "cap", "created", "exp", "plan_hash")
 SCENARIO_LABELS = {"no_show": "no-show", "cancel": "cancellation", "goodwill": "no-show with goodwill refund"}
+ORDER_TOKEN_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")      # PayPal's ?token= on return_url / cancel_url
 
 
 def video_safe() -> bool:
@@ -227,12 +229,30 @@ class DemoState:
                     return s, b
         return None
 
-    def _on_order_approved(self, resource: dict) -> str:
+    def _on_order_approved(self, resource: dict, source: str = "PayPal webhook") -> str:
+        """The payer approved an order. Reached from the CHECKOUT.ORDER.APPROVED webhook and from
+        the buyer's redirect back to /chat/return, whichever comes first: both run under the lock,
+        and only a booking still `booked` is confirmed, so the second arrival is a no-op."""
         found = self._booking_with("order_id", str(resource.get("id", "")))
         if found is None or found[1]["status"] != "booked":
             return "no booking waiting for this order"
-        self.front.on_payer_approved(found[1]["order_id"], source="PayPal webhook")
+        self.front.on_payer_approved(found[1]["order_id"], source=source)
         return found[1]["status"]
+
+    def payer_returned(self, order_id: str) -> str:
+        """PayPal sent the buyer back to return_url with ?token=<order id>: the same confirm path as
+        the webhook, so a live run needs no webhook tunnel. Authorizing only holds money, and PayPal
+        refuses it unless the payer really approved that order."""
+        with self.lock:
+            return self._on_order_approved({"id": order_id}, source="Back from PayPal")
+
+    def payer_cancelled(self, order_id: str) -> bool:
+        with self.lock:
+            found = self._booking_with("order_id", order_id)
+            if found is None or found[1]["status"] != "booked":
+                return False
+            self.front.say("The customer left PayPal without approving. Nothing is held.", who="system")
+            return True
 
     def _on_authorization(self, what: str):
         def handle(resource: dict) -> str:
@@ -511,6 +531,25 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
         if message.strip():
             with state.action(f'You sent "{message.strip()[:80]}"'):
                 state.front.handle(message)
+        return RedirectResponse("/chat#end", status_code=303)
+
+    # ---- PayPal sends the buyer back here (experience_context.return_url / cancel_url)
+    @app.get("/chat/return")
+    def chat_return(token: str = ""):
+        if ORDER_TOKEN_RE.fullmatch(token):
+            with state.action("The customer came back from PayPal") as box:
+                out = state.payer_returned(token)
+                if out == "no booking waiting for this order":
+                    box["label"] += " (nothing to confirm: already held, or not our order)"
+            state.persist()                           # a GET that changed state: save it too
+        return RedirectResponse("/chat#end", status_code=303)
+
+    @app.get("/chat/cancel")
+    def chat_cancel(token: str = ""):
+        if ORDER_TOKEN_RE.fullmatch(token):
+            with state.action("The customer left PayPal without approving"):
+                state.payer_cancelled(token)
+            state.persist()
         return RedirectResponse("/chat#end", status_code=303)
 
     @app.get("/checkout/{order_id}", response_class=HTMLResponse)

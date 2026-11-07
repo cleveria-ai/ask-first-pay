@@ -79,18 +79,16 @@ def test_goodwill_refund_needs_its_own_mandate(world):
     assert provider.captures[cap["capture_id"]].status == "PARTIALLY_REFUNDED"
 
 
-def test_capture_after_the_honor_period_needs_reauthorization(world):
+def test_capture_after_the_honor_period_is_still_allowed_and_reauthorize_renews_the_guarantee(world):
+    """As on PayPal: after day 3 the funds are no longer guaranteed, but the hold can still be
+    captured (until day 29). Reauthorizing is how the business renews the guarantee first."""
     provider, priv, agent, owner, auth, clock = world
     clock.t += 4 * DAY
-    m = agent.request("capture_deposit", auth.authorization_id, 10.0)
-    _approve(owner, priv, m)
-    with pytest.raises(MandateRejected) as e:
-        agent.execute(m["jti"], "capture_deposit", auth.authorization_id, 10.0)
-    assert e.value.reason == "executor_failed"
     new = provider.reauthorize(auth.authorization_id, request_id="reauth-1")
-    m2 = agent.request("capture_deposit", new.authorization_id, 10.0)
-    _approve(owner, priv, m2)
-    agent.execute(m2["jti"], "capture_deposit", new.authorization_id, 10.0)
+    assert new.authorization_id != auth.authorization_id
+    m = agent.request("capture_deposit", new.authorization_id, 10.0)
+    _approve(owner, priv, m)
+    agent.execute(m["jti"], "capture_deposit", new.authorization_id, 10.0)
     assert len(provider.captures) == 1
 
 

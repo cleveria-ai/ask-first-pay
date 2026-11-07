@@ -26,26 +26,48 @@ Money rules, which you cannot change:
 - Never promise a refund; you can only request one."""
 
 MAX_STEPS = 8
+# Room for adaptive thinking plus a tool call in one response. 1024 could be spent on thinking
+# alone and cut the tool call off. Non-streaming, so it stays well under the SDK's HTTP timeout.
+DEFAULT_MAX_TOKENS = 16000
+MIN_MAX_TOKENS = 4096
+
+
+def max_tokens_from_env() -> int:
+    """ASK_FIRST_MAX_TOKENS, never below MIN_MAX_TOKENS (a bad value falls back to the default)."""
+    try:
+        n = int(os.environ.get("ASK_FIRST_MAX_TOKENS") or DEFAULT_MAX_TOKENS)
+    except ValueError:
+        n = DEFAULT_MAX_TOKENS
+    return max(MIN_MAX_TOKENS, n)
 
 
 class Model(Protocol):
     def create(self, *, system: str, messages: list, tools: list) -> list:
-        """Return Anthropic-style content blocks: {"type":"text"|"tool_use", ...}."""
+        """Return Anthropic-style content blocks ({"type": "text" | "tool_use" | "thinking" | ...}).
+        Every block goes back into the history unchanged."""
 
 
 class AnthropicModel:
-    def __init__(self, model: str | None = None, client=None) -> None:
+    """Claude through the Messages API, with adaptive thinking.
+
+    The whole assistant turn is returned, every block in order: thinking (and redacted_thinking)
+    blocks must be sent back unchanged, signature included, or the next request in a tool loop
+    loses the reasoning or is refused. Text written between tool calls can also arrive as
+    thinking blocks on current models, so dropping them would drop part of the turn."""
+
+    def __init__(self, model: str | None = None, client=None, max_tokens: int | None = None) -> None:
         self.model = model or os.environ.get("ASK_FIRST_MODEL", "claude-sonnet-5-5")
+        self.max_tokens = max(MIN_MAX_TOKENS, max_tokens) if max_tokens else max_tokens_from_env()
         if client is None:
             import anthropic
             client = anthropic.Anthropic()          # key from ANTHROPIC_API_KEY
         self.client = client
 
     def create(self, *, system, messages, tools):
-        r = self.client.messages.create(model=self.model, max_tokens=1024, system=system,
-                                        messages=messages, tools=tools)
+        r = self.client.messages.create(model=self.model, max_tokens=self.max_tokens, system=system,
+                                        messages=messages, tools=tools, thinking={"type": "adaptive"})
         return [b.model_dump(exclude_none=True) if hasattr(b, "model_dump") else dict(b)
-                for b in r.content if getattr(b, "type", None) in ("text", "tool_use")]
+                for b in r.content]
 
 
 class ScriptedModel:
@@ -78,8 +100,8 @@ def run_turn(state: AgentState | None, message: str, *, gate: AgentGate, desk: H
     for _ in range(MAX_STEPS):
         blocks = model.create(system=SYSTEM, messages=state.messages, tools=TOOLS)
         state.messages.append({"role": "assistant", "content": blocks})
-        replies += [b["text"] for b in blocks if b["type"] == "text" and b.get("text")]
-        uses = [b for b in blocks if b["type"] == "tool_use"]
+        replies += [b["text"] for b in blocks if b.get("type") == "text" and b.get("text")]
+        uses = [b for b in blocks if b.get("type") == "tool_use"]
         if not uses:
             break
         results = [{"type": "tool_result", "tool_use_id": u["id"],

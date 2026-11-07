@@ -41,3 +41,15 @@ commands, or a `[tool.setuptools]` package-dir entry in `pyproject.toml`).
 - `pyproject.toml`: a new optional extra `browser = ["playwright>=1.40"]` for the two browser
   tests (`-k "approve_above_fold or buzzes"`) and `scripts/screenshots.py`. Not part of `dev`:
   without Playwright (or its Chromium) those tests skip, so a judge's plain `pytest` stays green.
+
+## N8 (n8-live-ready): create-order idempotency key in the port
+
+- `ports.py`: `PaymentProvider.create_order(amount, currency, reference, request_id=None)`.
+  `request_id` is the order's own `PayPal-Request-Id`: the caller chooses it once per order and
+  sends the same one when it retries that creation. `None` means a fresh uuid4. It is never
+  derived from `reference` (B1: `booking-N` repeats across conversations and restarts, and PayPal
+  would hand the second customer the first one's order). Positional callers are unchanged.
+- `gate.py`: only `HoldDesk.create_order` changes, to pass `request_id` through. Nothing in
+  `AgentGate.describe` or the mandate path is touched (that text belongs to N9).
+- `FakeProvider`: `create_order` honours the same idempotency (B4); a capture after the 3-day
+  honor period is accepted until day 29, as on PayPal (B5).

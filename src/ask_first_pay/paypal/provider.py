@@ -2,12 +2,22 @@
 
 Sandbox by default. Production needs both environment="production" and allow_production=True.
 Credentials come only from PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET (or explicit arguments).
+
+Where the payer comes back: every order carries `payment_source.paypal.experience_context` with
+`return_url` (`<ASK_FIRST_PUBLIC_URL>/chat/return`) and `cancel_url` (`.../chat/cancel`); PayPal
+appends `?token=<order id>`. `shipping_preference: NO_SHIPPING` because a deposit ships nothing,
+and `user_action: CONTINUE` because nothing is charged when the payer clicks: we authorize after
+the redirect and capture (maybe never) later. Orders v2 spec, `paypal_wallet_experience_context`
+(https://developer.paypal.com/api/orders/v2/schema.json): CONTINUE is for "when the final amount
+is not known when the checkout flow is initiated and you want to redirect the customer to the
+merchant page without processing the payment"; PAY_NOW processes "immediately".
 """
 from __future__ import annotations
 
 import hashlib
 import os
 import time
+import uuid
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -20,6 +30,8 @@ BASES = {
     "production": "https://api-m.paypal.com",
 }
 TOKEN_MARGIN_S = 60
+DEFAULT_PUBLIC_URL = "http://localhost:8000"     # where the demo runs; ASK_FIRST_PUBLIC_URL overrides it
+DEFAULT_BRAND = "Bright Smile Dental"            # fictional business; ASK_FIRST_BRAND overrides it
 
 
 def format_amount(amount: float) -> str:
@@ -43,7 +55,7 @@ class PayPalProvider:
     def __init__(self, client_id: str | None = None, client_secret: str | None = None, *,
                  environment: str = "sandbox", allow_production: bool = False,
                  transport: httpx.BaseTransport | None = None, timeout: float = 20.0,
-                 clock=time.time) -> None:
+                 clock=time.time, public_url: str | None = None, brand_name: str | None = None) -> None:
         if environment not in BASES:
             raise ValueError(f"unknown environment {environment!r}")
         if environment == "production" and not allow_production:
@@ -54,6 +66,9 @@ class PayPalProvider:
         self._client_secret = client_secret or os.environ.get("PAYPAL_CLIENT_SECRET", "")
         self._http = httpx.Client(transport=transport, timeout=timeout)
         self._clock = clock
+        base = (public_url or os.environ.get("ASK_FIRST_PUBLIC_URL") or DEFAULT_PUBLIC_URL).rstrip("/")
+        self.return_url, self.cancel_url = f"{base}/chat/return", f"{base}/chat/cancel"
+        self.brand_name = (brand_name or os.environ.get("ASK_FIRST_BRAND") or DEFAULT_BRAND)[:127]
         self._token: str | None = None
         self._token_until = 0.0
         self._auth_info: dict[str, tuple[str, str, str]] = {}   # auth id -> (order_id, amount, currency)
@@ -122,12 +137,20 @@ class PayPalProvider:
         return self._cap_currency[capture_id]
 
     # -- port ------------------------------------------------------------------------------
-    def create_order(self, amount: float, currency: str, reference: str) -> Order:
+    def experience_context(self) -> dict:
+        return {"brand_name": self.brand_name, "shipping_preference": "NO_SHIPPING",
+                "user_action": "CONTINUE", "return_url": self.return_url, "cancel_url": self.cancel_url}
+
+    def create_order(self, amount: float, currency: str, reference: str,
+                     request_id: str | None = None) -> Order:
         value = format_amount(amount)
         body = {"intent": "AUTHORIZE", "purchase_units": [
-            {"reference_id": reference, "amount": {"currency_code": currency, "value": value}}]}
+            {"reference_id": reference, "amount": {"currency_code": currency, "value": value}}],
+            "payment_source": {"paypal": {"experience_context": self.experience_context()}}}
+        # Never derived from `reference`: booking ids restart at booking-1 in every conversation,
+        # and PayPal would answer a second customer with the first one's order.
         r = self._send("POST", "/v2/checkout/orders", json=body,
-                       request_id=_derive_id("create_order", reference, value, currency)).json()
+                       request_id=request_id or str(uuid.uuid4())).json()
         links = {link.get("rel"): link.get("href") for link in r.get("links", [])}
         url = links.get("payer-action") or links.get("approve") or ""
         return Order(r["id"], float(value), currency, reference, url, r["status"])

@@ -136,12 +136,19 @@ the free Community edition:
    export ANTHROPIC_API_KEY=...          # optional: Claude instead of the scripted model
    scripts/demo.sh
    ```
-3. Book in the chat; **Hold the deposit** now opens PayPal's sandbox approval page. After paying,
-   PayPal's `CHECKOUT.ORDER.APPROVED` webhook tells the agent to authorize the order, if you
-   subscribed one: expose the demo (a tunnel), add a sandbox webhook for
-   `https://<host>/webhooks/paypal`, and `export PAYPAL_WEBHOOK_ID=<its id>` before starting.
-   Without it, tell the chat you approved it. Approvals on `/owner` then capture, void or refund
-   in the sandbox.
+3. Book in the chat; **Hold the deposit** now opens PayPal's sandbox approval page (no shipping
+   address asked, a **Continue** button: nothing is charged). After approving, PayPal sends the
+   buyer back to `/chat/return`, which authorizes the order (holds the deposit). That needs no
+   tunnel; `ASK_FIRST_PUBLIC_URL` (default `http://localhost:8000`) sets where PayPal sends the
+   buyer back. A `CHECKOUT.ORDER.APPROVED` webhook does the same if you subscribed one (expose the
+   demo, add a sandbox webhook for `https://<host>/webhooks/paypal`, `export PAYPAL_WEBHOOK_ID`);
+   whichever arrives first holds the deposit and the other changes nothing. Approvals on `/owner`
+   then capture, void or refund in the sandbox.
+4. Evidence of a run without the UI: `python scripts/sandbox_run.py` creates two orders and prints
+   their approval links; after approving both, `python scripts/sandbox_run.py --continue <first>
+   --void-order <second>` authorizes, captures through an approved mandate, retries the capture
+   with the same `PayPal-Request-Id`, voids the second hold, and appends ids and HTTP statuses
+   (never tokens) to `docs/SANDBOX_RUN.md`.
 
 The adapter (`src/ask_first_pay/paypal/`) talks only to `api-m.sandbox.paypal.com` unless it is
 built with `environment="production", allow_production=True`. The sandbox path is covered by
