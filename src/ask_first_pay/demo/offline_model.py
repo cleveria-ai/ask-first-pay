@@ -59,9 +59,10 @@ STATUS_ES = {"booked": "reservada", "deposit_held": "depósito retenido", "captu
 T = {
     "reserved": {"en": "Reserved {slot}. To confirm, hold a ${dep} deposit (nothing is charged now).",
                  "es": "Reservé {slot}. Para confirmar, deja un depósito de ${dep} retenido (no se cobra nada ahora)."},
-    "held": {"en": "Confirmed: {slot}. ${dep} is held, not charged. If you cancel, a person at the clinic releases it.",
-             "es": "Confirmado: {slot}. Los ${dep} están retenidos, no cobrados. "
-                   "Si cancelas, una persona de la clínica los libera."},
+    "held": {"en": "Confirmed: {slot}, with a ${dep} deposit. It is held, not charged. "
+                   "If you cancel, a person at the clinic releases it.",
+             "es": "Confirmado: {slot}, con un depósito de ${dep}. Está retenido, no cobrado. "
+                   "Si cancelas, una persona de la clínica lo libera."},
     "asked_clinic": {"en": "I can't move your deposit myself; I've asked the clinic.",
                      "es": "No puedo mover tu depósito yo mismo; ya se lo pedí a la clínica."},
     "sorry": {"en": "I'm sorry to hear that. ", "es": "Lamento mucho lo ocurrido. "},
