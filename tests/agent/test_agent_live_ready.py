@@ -213,9 +213,11 @@ def test_agent_loop_history_blocks_with_max_tokens_and_adaptive_thinking(w, monk
 
 
 @pytest.mark.parametrize("env,expected", [("20000", 20000), ("2048", MIN_MAX_TOKENS), ("lots", 16000)])
-def test_agent_loop_thinking_room_max_tokens_from_env(monkeypatch, env, expected):
+def test_agent_loop_thinking_room_max_tokens_from_env(w, monkeypatch, env, expected):
     monkeypatch.setenv("ASK_FIRST_MAX_TOKENS", env)
-    assert AnthropicModel(model="m", client=FakeClient([])).max_tokens == expected
+    client = FakeClient([[TextBlock(type="text", text="hi")]])
+    run_turn(AgentState(), "hello", gate=w.gate, desk=w.desk, model=AnthropicModel(model="m", client=client))
+    assert client.messages.seen[0]["max_tokens"] == expected       # what reaches the API, not an attribute
     assert MIN_MAX_TOKENS >= 4096
 
 

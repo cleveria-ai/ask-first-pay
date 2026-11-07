@@ -134,16 +134,20 @@ def step_b(p: PayPalProvider, recorder: Recorder, capture_order: str, void_order
         rec["void_order_created"] = f"{second.order_id} ({second.status})"
         print(f"Second order {second.order_id} created. Buyer approval link:\n  {second.approve_url}\n"
               f"Approve it, then run again with --void-order {second.order_id}", file=out)
-    rec["void_order"] = void_order
-    try:
-        vauth = p.authorize(void_order)
-        rec["void_authorization"] = f"{vauth.authorization_id} ({vauth.status})"
-        vjti = _approved_mandate(gate, owner, priv, "void_deposit", vauth.authorization_id, 0.01)
-        voided = gate.execute(vjti, "void_deposit", vauth.authorization_id, 0.01)["outcome"]
-        rec["void"] = f"{voided['authorization_id']} ({voided['status']})"
-    except (ProviderError, MandateRejected) as e:
-        rec["void_story_error"] = f"{type(e).__name__}: {e}"
-        ok = False
+        # The buyer has not approved it yet, so PayPal would refuse to authorize it now: the void
+        # story waits for the next run instead of recording a refusal that proves nothing.
+        rec["void_story"] = f"pending: approve {second.order_id}, then run again with --void-order {second.order_id}"
+    else:
+        rec["void_order"] = void_order
+        try:
+            vauth = p.authorize(void_order)
+            rec["void_authorization"] = f"{vauth.authorization_id} ({vauth.status})"
+            vjti = _approved_mandate(gate, owner, priv, "void_deposit", vauth.authorization_id, 0.01)
+            voided = gate.execute(vjti, "void_deposit", vauth.authorization_id, 0.01)["outcome"]
+            rec["void"] = f"{voided['authorization_id']} ({voided['status']})"
+        except (ProviderError, MandateRejected) as e:
+            rec["void_story_error"] = f"{type(e).__name__}: {e}"
+            ok = False
 
     rec["finished"] = now()
     rec["http"] = list(recorder.calls)

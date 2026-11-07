@@ -113,17 +113,18 @@ def test_sandbox_run_reports_a_different_capture_id_when_paypal_does_not_dedupe(
     assert "| same_capture_id_on_retry | NO |" in record.read_text()
 
 
-def test_sandbox_run_without_void_order_creates_one_and_records_paypal_refusal(creds, tmp_path):
+def test_sandbox_run_without_void_order_creates_one_and_waits_for_the_buyer(creds, tmp_path):
     record = tmp_path / "SANDBOX_RUN.md"
     sb = Sandbox(approved={"ORDER1"})
     sb.orders = 1                                    # ORDER1 was created by step (a)
     rc, out = run(["--continue", "ORDER1"], sb, record)
-    assert rc == 1
+    assert rc == 0                                   # the capture story passed; the void story waits
     assert "checkoutnow?token=ORDER2" in out and "--void-order ORDER2" in out
     text = record.read_text()
     assert "| void_order_created | ORDER2 (PAYER_ACTION_REQUIRED) |" in text
-    assert "| void_story_error | ProviderError: UNPROCESSABLE_ENTITY: not approved |" in text
-    assert "`POST /v2/checkout/orders/ORDER2/authorize` 422" in text
+    assert "| void_story | pending: approve ORDER2, then run again with --void-order ORDER2 |" in text
+    assert "void_story_error" not in text
+    assert not any(r.url.path == "/v2/checkout/orders/ORDER2/authorize" for r in sb.requests)
     assert "| same_capture_id_on_retry | yes |" in text
     sb2 = Sandbox(approved={"ORDER1"})
     sb2.orders = 1
