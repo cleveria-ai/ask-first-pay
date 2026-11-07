@@ -82,7 +82,7 @@ def card(m: dict, booking: dict | None) -> dict:
         # The cap a void carries (0.01) is symbolic: the engine needs a positive amount. It goes in
         # the details; the headline says what really happens to the money.
         headline = f"Moves $0.00 · releases the {money(held)} hold" if held else "Moves $0.00 · releases the hold"
-        chip = "Releases the hold · needs your signature"
+        chip = "Needs your signature"
     else:
         headline, chip = action, "Needs your signature"
     who = ""

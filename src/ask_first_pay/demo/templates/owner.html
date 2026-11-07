@@ -76,7 +76,7 @@
   <dl class="tiles">
     <div class="tile wide-tile"><dt>The agent, on its own</dt>
       <dd><span class="num">{{ today.agent_calls }}</span> PayPal {{ 'call' if today.agent_calls == 1 else 'calls' }} · $0.00 moved</dd>
-      <dd class="sub">{{ today.bookings }} {{ 'booking' if today.bookings == 1 else 'bookings' }} · {{ today.orders }} {{ 'order' if today.orders == 1 else 'orders' }} created · {{ today.holds }} {{ 'hold' if today.holds == 1 else 'holds' }} · {{ today.reauthorizations }} re-hold {{ 'check' if today.reauthorizations == 1 else 'checks' }}</dd></div>
+      <dd class="sub">{{ today.bookings }} {{ 'booking' if today.bookings == 1 else 'bookings' }} · {{ today.orders }} {{ 'order' if today.orders == 1 else 'orders' }} created · {{ today.holds }} {{ 'hold' if today.holds == 1 else 'holds' }}{% if today.reauthorizations %} · {{ today.reauthorizations }} re-hold {{ 'check' if today.reauthorizations == 1 else 'checks' }}{% endif %}</dd></div>
     <div class="tile wide-tile"><dt>You</dt>
       <dd><span class="num">{{ today.taps }}</span> {{ 'tap' if today.taps == 1 else 'taps' }}</dd>
       <dd class="sub">{{ today.approvals }} approved · {{ today.declines }} declined</dd></div>

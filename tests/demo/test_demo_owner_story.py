@@ -124,7 +124,7 @@ def test_owner_card_request_id_and_paypal_ids_for_void_and_refund(demo):
     assert by_id[void]["paypal_id"] == f"PayPal authorization {void_call[1]} (VOIDED)"
     grid = (owner_view.__file__.rsplit("/", 1)[0] + "/static/grid.js")
     js = open(grid, encoding="utf-8").read()
-    assert "Sent to PayPal as PayPal-Request-Id" in js and "r.request_id" in js and "r.paypal_id" in js
+    assert "'sent to PayPal as', r.request_id ? 'PayPal-Request-Id: ' + r.request_id" in js and "r.paypal_id" in js
 
 
 def test_owner_card_request_id_survives_a_restart_with_the_store(tmp_path):

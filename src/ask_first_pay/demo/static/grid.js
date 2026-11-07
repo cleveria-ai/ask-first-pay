@@ -51,7 +51,7 @@
         return {title: 'Mandate ' + r.short + ' · ' + r.state, fields: [
           ['jti', r.id], ['action', r.action], ['recipient', r.resource], ['cap', 'USD ' + r.cap],
           ['asked', r.created_text], ['expires', r.exp_text], ['plan_hash', r.plan_hash],
-          ['Sent to PayPal as PayPal-Request-Id', r.state === 'used' ? r.id : 'not sent (never executed)'],
+          ['sent to PayPal as', r.state === 'used' ? 'PayPal-Request-Id: ' + r.id : 'not sent (never executed)'],
           ['PayPal returned', r.paypal || '—'],
           ['ledger rows', (r.ledger && r.ledger.length) ? r.ledger.map(function (n) { return '#' + n; }).join(', ') : 'none yet']],
           links: (r.ledger || []).map(function (n) { return ['ledger row #' + n, '/ledger/entry/' + n]; }),
@@ -80,7 +80,7 @@
         return {title: 'Ledger row #' + r.n + ' · ' + r.result + (r.reason ? ' · ' + r.reason : ''), fields: [
           ['time', r.ts_iso], ['result', r.result + (r.reason ? ' (' + r.reason + ')' : '')],
           ['mandate jti', r.mandate_id],
-          ['Sent to PayPal as PayPal-Request-Id', r.request_id || 'not sent: the gate refused it before PayPal'],
+          ['sent to PayPal as', r.request_id ? 'PayPal-Request-Id: ' + r.request_id : 'not sent: the gate refused it before PayPal'],
           ['PayPal returned', r.paypal_id || '—'],
           ['action', r.action], ['recipient', r.resource],
           ['amount', r.amount ? 'USD ' + r.amount : '—'],

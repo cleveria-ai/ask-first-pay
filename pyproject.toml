@@ -18,6 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+browser = ["playwright>=1.40"]   # N9 browser tests and scripts/screenshots.py (then: python -m playwright install chromium)
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "libs/ask-first-mandate/src"]
