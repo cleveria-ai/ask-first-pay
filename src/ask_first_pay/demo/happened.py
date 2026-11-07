@@ -64,8 +64,12 @@ def describe(demo, label: str, before: dict) -> dict:
         was = before["mandates"].get(jti)
         if was is None:
             m = demo.owner.get(jti) or {}
-            items.append(f"The agent asked the owner for {m.get('action')} on {m.get('recipient')}, at most "
-                         f"{_money(m.get('cap', 0))}. Nothing moves until the owner approves.")
+            if m.get("action") == "void_deposit":      # its 0.01 cap is symbolic: say what it does
+                items.append(f"The agent asked the owner to release (void) the hold {m.get('recipient')}; "
+                             f"a void moves no money. Nothing happens until the owner approves.")
+            else:
+                items.append(f"The agent asked the owner for {m.get('action')} on {m.get('recipient')}, at most "
+                             f"{_money(m.get('cap', 0))}. Nothing moves until the owner approves.")
             if st == "pending":
                 tones.add("warn")
         elif st == "declined" and was != "declined":

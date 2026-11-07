@@ -1,15 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Owner{% endblock %}
-{% block bodyclass %}wide{% endblock %}
+{% block bodyclass %}wide owner-page{% endblock %}
+{% block happened %}{% endblock %}
 {% block main %}
 <div class="page-head">
   <h1>Owner approvals</h1>
-  <p>Your phone. Nothing the agent asks for moves money until you tap Approve here.</p>
+  <p>Your phone. The agent can hold a deposit; only your tap moves it.</p>
+  {% if today.zone_note %}<p class="zone-note" id="zone-note" role="note">{{ today.zone_note }}</p>{% endif %}
 </div>
-<p id="device-status" class="card {{ 'ok' if paired else 'neutral' }}" data-paired="{{ 'yes' if paired else 'no' }}" role="status">
-  {% if paired %}<span class="chip ok">Paired</span> This phone signs approvals with key <code>{{ paired[:12] }}…</code> (Ed25519, never leaves the browser).
-  {% else %}<span class="chip warn">Not paired</span> No phone is paired yet: nobody can approve anything.{% endif %}
-</p>
 
 {% if not paired %}
 <section aria-labelledby="pair-h" id="pair-section" class="card">
@@ -24,34 +22,82 @@
 </section>
 {% endif %}
 
-<div class="split">
-<section aria-labelledby="pending-h">
-  <h2 id="pending-h">Waiting for you <span class="count">{{ pending|length }}</span><span class="sr"> ({{ pending|length }})</span></h2>
-  <ul class="pending-list" id="pending-list">
+<div class="split owner-split">
+<div class="owner-main">
+{% include "_happened.html" %}
+
+<section aria-labelledby="pending-h" class="pending">
+  <h2 id="pending-h">Waiting for you <span class="count" id="pending-count">{{ pending|length }}</span><span class="sr"> ({{ pending|length }})</span></h2>
+  <button type="button" class="new-request" id="new-request" hidden>A new request arrived · show it</button>
+  <ul class="pending-list" id="pending-list" data-poll="/owner/api/pending" data-asked="{{ signal.asked }}">
   {% for r in pending %}
-    <li class="card mandate" data-id="{{ r.id }}" data-canonical="{{ r.canonical }}">
-      <span class="chip warn">Waiting · single use</span>
-      <p class="headline"><strong>{{ r.headline }}</strong></p>
-      <p class="what"><code>{{ r.action }}</code> on <code>{{ r.resource }}</code></p>
-      <dl>
-        <dt>PayPal resource</dt><dd>{{ r.resource }}</dd>
-        <dt>At most</dt><dd>USD {{ r.cap }}</dd>
-        <dt>Expires</dt><dd>{{ r.exp_text }}</dd>
-        <dt>Single use</dt><dd>yes</dd>
-      </dl>
-      <p class="hint">{{ r.description }}</p>
-      <div class="row">
+    <li class="card mandate act-{{ r.action }}" data-id="{{ r.id }}" data-canonical="{{ r.canonical }}">
+      <div class="mandate-top">
+        <span class="kicker">{{ r.kicker }}</span>
+        <span class="expires" data-exp="{{ r.exp }}">Expires in {{ r.exp_left }}</span>
+      </div>
+      <p class="headline">{{ r.headline }}</p>
+      {% if r.who %}<p class="who">{{ r.who }}</p>{% endif %}
+      <p class="chips"><span class="chip {{ 'info' if r.action == 'void_deposit' else 'warn' }}">{{ r.chip }}</span></p>
+      <p class="approval-id">Approval id <code class="rid">{{ r.short }}</code> (sent to PayPal as PayPal-Request-Id)</p>
+      <div class="row decide">
         <button class="btn approve" type="button">Approve</button>
         <button class="btn danger decline" type="button">Decline</button>
       </div>
       <p class="result" role="status"></p>
+      <details class="signed">
+        <summary>What you sign</summary>
+        <dl>
+          <dt>Action</dt><dd data-signed="action">{{ r.action }}</dd>
+          <dt>PayPal resource</dt><dd data-signed="recipient">{{ r.resource }}</dd>
+          <dt>At most</dt><dd data-signed="cap" data-value="{{ r.cap }}">{{ r.cap_text }}</dd>
+          <dt>Expires</dt><dd>{{ r.exp_text }}</dd>
+          <dt>Asked</dt><dd>{{ r.created_text }}</dd>
+          <dt>Single use</dt><dd>yes</dd>
+          <dt>Approval id</dt><dd><code>{{ r.id }}</code></dd>
+        </dl>
+        <p class="hint">{{ r.description }}</p>
+      </details>
     </li>
   {% else %}
-    <li class="empty"><strong>Nothing is waiting.</strong>The agent has not asked for anything. Press a scenario to make it ask.
+    <li class="empty"><strong>Nothing is waiting.</strong>The agent has not asked for anything. This page checks every few seconds.
       <br><a class="btn secondary" href="/chat">Go to the chat</a></li>
   {% endfor %}
   </ul>
 </section>
+
+<section aria-labelledby="today-h" class="card today" id="today">
+  <div class="today-head">
+    <h2 id="today-h">Today <span class="today-day">{{ today.day }}</span></h2>
+    <span class="hint">from the bookings and the ledger</span>
+  </div>
+  <p class="unsigned {{ 'ok' if today.clean else 'bad' }}" id="unsigned-line"><span class="amount">{{ today.unsigned }}</span> moved without your signature</p>
+  <p class="hint" id="today-check">{% if today.chain_ok and not today.rows %}Nothing has moved yet: the ledger is empty.{% elif today.chain_ok %}Checked against all {{ today.rows }} ledger {{ 'row' if today.rows == 1 else 'rows' }}; chain intact.{% else %}The ledger chain is BROKEN: do not trust these numbers.{% endif %}
+    {% if today.unsigned_rows %}{{ today.unsigned_rows }} executed {{ 'row has' if today.unsigned_rows == 1 else 'rows have' }} no valid signature of yours.{% endif %}</p>
+  {% if today.unsigned_rows_before %}<p class="unsigned-before" id="unsigned-before">And before today: {{ today.unsigned_before }} moved without your signature ({{ today.unsigned_rows_before }} {{ 'row' if today.unsigned_rows_before == 1 else 'rows' }}).</p>{% endif %}
+  <dl class="tiles">
+    <div class="tile wide-tile"><dt>The agent, on its own</dt>
+      <dd><span class="num">{{ today.agent_calls }}</span> PayPal {{ 'call' if today.agent_calls == 1 else 'calls' }} · $0.00 moved</dd>
+      <dd class="sub">{{ today.bookings }} {{ 'booking' if today.bookings == 1 else 'bookings' }} · {{ today.orders }} {{ 'order' if today.orders == 1 else 'orders' }} created · {{ today.holds }} {{ 'hold' if today.holds == 1 else 'holds' }}{% if today.reauthorizations %} · {{ today.reauthorizations }} re-hold {{ 'check' if today.reauthorizations == 1 else 'checks' }}{% endif %}</dd></div>
+    <div class="tile wide-tile"><dt>You</dt>
+      <dd><span class="num">{{ today.taps }}</span> {{ 'tap' if today.taps == 1 else 'taps' }}</dd>
+      <dd class="sub">{{ today.approvals }} approved · {{ today.declines }} declined</dd></div>
+    <div class="tile"><dt>Kept</dt><dd><span class="num">{{ today.kept }}</span></dd></div>
+    <div class="tile"><dt>Given back</dt><dd><span class="num">{{ today.given_back }}</span></dd></div>
+    <div class="tile"><dt>Released</dt><dd><span class="num">{{ today.released }}</span></dd></div>
+    <div class="tile"><dt>Refused</dt><dd><span class="num">{{ today.refused }}</span></dd>
+      {% if today.refused_reasons %}<dd class="sub">{{ today.refused_reasons }}</dd>{% endif %}</div>
+  </dl>
+  {% if today.undated_bookings or today.undated_rows %}<p class="hint" id="today-undated">Includes {% if today.undated_bookings %}{{ today.undated_bookings }} {{ 'booking' if today.undated_bookings == 1 else 'bookings' }}{% endif %}{% if today.undated_bookings and today.undated_rows %} and {% endif %}{% if today.undated_rows %}{{ today.undated_rows }} ledger {{ 'row' if today.undated_rows == 1 else 'rows' }}{% endif %} with no recorded date.</p>{% endif %}
+  {% if today.failed %}<p class="hint">{{ today.failed }} approved {{ 'action' if today.failed == 1 else 'actions' }} failed at PayPal (spent, not retried).</p>{% endif %}
+</section>
+</div>
+
+<div class="owner-side">
+<p id="device-status" class="card {{ 'ok' if paired else 'neutral' }}" data-paired="{{ 'yes' if paired else 'no' }}" role="status">
+  {% if paired %}<span class="chip ok">Paired</span> This phone signs approvals with key <code>{{ paired[:12] }}…</code> (Ed25519, never leaves the browser).
+  {% else %}<span class="chip warn">Not paired</span> No phone is paired yet: nobody can approve anything.{% endif %}
+</p>
 
 <section aria-labelledby="all-h">
   <h2 id="all-h">All mandates</h2>
@@ -77,9 +123,10 @@
   <div class="empty"><strong>No mandates yet.</strong>Every request the agent makes is listed here, with its state.</div>
   {% endif %}
   <div class="card detail" id="mandates-detail" hidden aria-live="polite"></div>
-  <p class="built">Table: AG Grid Community (vendored, MIT). Tap a row for its signed fields.</p>
+  {% if not video %}<p class="built">Table: AG Grid Community (vendored, MIT). Tap a row for its signed fields.</p>{% else %}<p class="built">Tap a row for its signed fields.</p>{% endif %}
   <script type="application/json" id="mandates-data">{{ rows | tojson }}</script>
 </section>
+</div>
 </div>
 {% endblock %}
 {% block scripts %}

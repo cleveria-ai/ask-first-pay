@@ -30,7 +30,7 @@
 </ul>
 </section>
 <section aria-labelledby="biz-h">
-<p class="meta"><span class="chip {{ 'info' if model_name == 'Claude' else 'neutral' }}">Agent model: {{ model_name }}</span>
+<p class="meta"><span class="chip {{ 'neutral' if model_label == 'offline scripted model' else 'info' }}" id="model-chip">Agent model: {{ model_label }}</span>
   <span class="chip neutral">{{ 'Simulated PayPal' if simulated else 'PayPal sandbox' }}</span></p>
 <h2 id="biz-h">Act as the business</h2>
 <p class="hint">Each scenario makes the agent ask the owner; approve it on <a href="/owner">Owner</a>.</p>

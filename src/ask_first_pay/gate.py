@@ -19,6 +19,8 @@ Three objects come out of here and they must never be confused:
 """
 from __future__ import annotations
 
+import os
+import time
 from dataclasses import asdict
 
 from ask_first import Ledger, MandateEngine
@@ -27,6 +29,35 @@ from .ports import PaymentProvider, ProviderError
 
 ACTIONS = ("capture_deposit", "void_deposit", "refund_deposit")
 TRANSIENT_RETRIES = 2      # a timeout or 5xx is retried with the SAME PayPal-Request-Id
+TTL_ENV = "ASK_FIRST_MANDATE_TTL_MIN"
+DEFAULT_TTL_MIN = 60       # an owner with a patient answers within the hour, not within 15 minutes
+MAX_TTL_MIN = 24 * 60      # a yes is for this decision, today; never a standing permission
+
+
+def mandate_ttl_s() -> int:
+    """How long an unsigned request waits for the owner: ASK_FIRST_MANDATE_TTL_MIN minutes,
+    60 by default. A bad value is refused instead of silently replaced."""
+    raw = os.environ.get(TTL_ENV, "").strip()
+    if not raw:
+        return DEFAULT_TTL_MIN * 60
+    try:
+        minutes = int(raw)
+    except ValueError:
+        raise ValueError(f"{TTL_ENV} must be a whole number of minutes, got {raw!r}") from None
+    if not 1 <= minutes <= MAX_TTL_MIN:
+        raise ValueError(f"{TTL_ENV} must be between 1 and {MAX_TTL_MIN} minutes, got {minutes}")
+    return minutes * 60
+
+
+def minutes_left(exp: int, now: float | None = None) -> str:
+    """"58 min", "1 h 35 min", "under a minute" or "expired": what a person reads, not a timestamp."""
+    left = int(exp) - int(time.time() if now is None else now)
+    if left <= 0:
+        return "expired"
+    if left < 60:
+        return "under a minute"
+    m = -(-left // 60)                       # round up: a fresh 60-minute mandate reads "60 min"
+    return f"{m} min" if m <= 90 else f"{m // 60} h {m % 60} min"
 
 
 def make_executor(provider: PaymentProvider, retries: int = TRANSIENT_RETRIES):
@@ -71,14 +102,15 @@ class AgentGate:
     def __setattr__(self, name, value):
         raise AttributeError("AgentGate is read-only")
 
-    def request(self, action: str, target: str, amount: float, ttl_s: int = 900, agent: str = "front-desk-agent") -> dict:
+    def request(self, action: str, target: str, amount: float, ttl_s: int | None = None,
+                agent: str = "front-desk-agent") -> dict:
         if action not in ACTIONS:
             raise ValueError(f"unknown action {action!r}")
         # A cap is money: whole cents only. The owner reads it as .2f and the PayPal adapter refuses
         # sub-cent amounts, so 9.996 would be signed as "10.00" and could never run as signed.
         if isinstance(amount, bool) or not isinstance(amount, (int, float)) or round(amount, 2) != amount:
             raise ValueError(f"amount must be a number of whole cents, got {amount!r}")
-        return dict(self._request(agent, action, target, amount, ttl_s=ttl_s))
+        return dict(self._request(agent, action, target, amount, ttl_s=mandate_ttl_s() if ttl_s is None else ttl_s))
 
     def execute(self, mandate_id: str, action: str, target: str, amount: float) -> dict:
         return self._execute(mandate_id, action, target, amount)
@@ -88,8 +120,9 @@ class AgentGate:
         m = self._get(mandate_id)
         if not m:
             return None
-        return (f"{m['action']} on {m['recipient']} for at most {m['cap']:.2f}, "
-                f"single use, expires at {m['exp']} (unix time), state {m['_state']}")
+        left = minutes_left(m["exp"])
+        return (f"{m['action']} on {m['recipient']} for at most {m['cap']:.2f}, single use, "
+                f"{'expired' if left == 'expired' else 'expires in ' + left}, state {m['_state']}")
 
     def view_ledger(self) -> dict:
         return self._view_ledger()
