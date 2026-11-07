@@ -10,8 +10,9 @@
 <section aria-label="Conversation with the front desk">
 <ol class="chat scroll" aria-label="Conversation" tabindex="0">
 {% for m in messages %}
-  <li class="msg {{ m.who }}"><span class="who">{{ {'customer': 'You', 'business': business, 'system': 'Note'}[m.who] }}</span>
+  <li class="msg {{ m.who }}"><span class="who">{{ (m.name or 'Customer') if m.who == 'customer' else {'business': business, 'system': 'Note'}[m.who] }}</span>
     <p>{{ m.text }}</p>
+    {% if m.tools %}<p class="built tools"><span class="sr">Tools the agent called: </span>{{ m.tools | join(' → ') }}</p>{% endif %}
     {% if m.link %}<a class="btn small" href="{{ m.link }}">{{ m.link_label or 'Open' }}</a>{% endif %}
   </li>
 {% endfor %}
@@ -20,7 +21,7 @@
 <form class="composer" method="post" action="/chat/send">
   <label for="message">Message</label>
   <input id="message" name="message" type="text" maxlength="500" autocomplete="off"
-         placeholder="book {{ slots[0] }}" required>
+         placeholder="I'm Lucía, book {{ slots[0] }}" required>
   <button class="btn" type="submit">Send</button>
 </form>
 <ul class="quick" aria-label="Quick messages">

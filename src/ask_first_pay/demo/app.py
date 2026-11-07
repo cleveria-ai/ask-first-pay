@@ -34,7 +34,8 @@ from ..agent.tools import SLOTS
 from ..store import SqliteStore
 from ..gate import AgentGate, HoldDesk, OwnerSide, make_engine
 from . import happened
-from .front import BUSINESS, GOODWILL_REFUND, SLOT_LABELS, AgentFrontDesk, Message
+from ..business import display_name
+from .front import CANCEL_MESSAGE, SLOT_LABELS, AgentFrontDesk, Message
 
 HERE = Path(__file__).parent
 PAIRING_TTL_S = 3600
@@ -163,7 +164,7 @@ class DemoState:
             f.conversations.append(st)
             f._models[id(st)] = f.model_factory(st)
         f._linked, f.approve_urls = set(fr["linked"]), dict(fr["approve_urls"])
-        f.goodwill, f.turns = {k: float(v) for k, v in fr["goodwill"].items()}, int(fr["turns"])
+        f.goodwill, f.turns = {k: bool(v) for k, v in fr["goodwill"].items()}, int(fr["turns"])
         if snap.get("provider") is not None and hasattr(self.provider, "load_dict"):
             self.provider.load_dict(snap["provider"])
 
@@ -281,7 +282,7 @@ class DemoState:
             if slot is None:                          # every slot taken: a new customer conversation
                 self.front.new_conversation()
                 slot = self.front.free_slot()
-            self.front.handle(f"Hi, please book {SLOT_LABELS[[*SLOTS].index(slot)]}")
+            self.front.handle(f"Hi, I'm {self.front.scenario_customer()}, please book {SLOT_LABELS[[*SLOTS].index(slot)]}")
             found = self.front.latest("booked")
             if found is None:
                 return None
@@ -298,16 +299,17 @@ class DemoState:
         with self.lock:
             if kind == "cancel":
                 self.front.say("Scenario: cancellation", who="system")
-                if self._booking_for_scenario() is None:
+                found = self._booking_for_scenario()
+                if found is None:
                     return False
-                self.front.handle("I need to cancel, sorry.")
+                self.front.handle(CANCEL_MESSAGE, found[0])        # the customer writes, in their conversation
             elif kind in ("no_show", "goodwill"):
                 self.front.say("Scenario: no-show" + (" with goodwill refund" if kind == "goodwill" else ""), who="system")
                 found = self._booking_for_scenario()
                 if found is None:
                     return False
                 s, b = found
-                self.front.no_show(s, b["id"], GOODWILL_REFUND if kind == "goodwill" else None)
+                self.front.no_show(s, b["id"], then_goodwill=kind == "goodwill")
             else:
                 return False
             return True
@@ -453,7 +455,7 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     templates = Jinja2Templates(directory=HERE / "templates")
 
     def page(request: Request, name: str, **ctx):
-        base = {"business": BUSINESS, "state": state, "simulated": state.simulated, "last": state.last}
+        base = {"business": display_name(), "state": state, "simulated": state.simulated, "last": state.last}
         return templates.TemplateResponse(request, name, {**base, **ctx})
 
     @app.get("/favicon.ico", include_in_schema=False)

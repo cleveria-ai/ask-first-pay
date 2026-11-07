@@ -31,7 +31,7 @@ def test_cancel_voids_and_never_refunds(demo):
     assert len(voids) == 1 and voids[0][2] == jti
     assert demo.calls("refund") == [] and demo.calls("capture") == []
     assert list(demo.provider.auths.values())[0].status == "VOIDED"
-    assert "nothing needs refunding" in demo.client.get("/chat").text
+    assert "Nothing was charged, so there is nothing to refund." in demo.client.get("/chat").text
 
 
 def test_cancel_through_the_chat_asks_the_owner_to_void(demo):
@@ -52,7 +52,8 @@ def test_goodwill_captures_then_refunds_with_two_approvals(demo):
     assert demo.calls("refund") == []
     demo.approve(ref)
     assert len(demo.calls("capture")) == 1 and len(demo.calls("refund")) == 1
-    assert demo.calls("refund")[0][2] == 4.0 and demo.calls("refund")[0][3] == ref
+    # the customer asked for the deposit back: the clinic is asked for what was captured, at most
+    assert demo.calls("refund")[0][2] == 10.0 and demo.calls("refund")[0][3] == ref
 
 
 def test_rejected_declined_mandate_shows_on_the_ledger_page(demo):

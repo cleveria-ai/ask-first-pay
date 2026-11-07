@@ -22,14 +22,14 @@ def body(req):
 
 
 def test_create_order_payload_and_payer_link():
-    p, m = make(public_url="https://shop.example", brand_name="Bright Smile Dental")
+    p, m = make(public_url="https://shop.example", brand_name="Clínica Bahía Imaginaria (fictional)")
     o = p.create_order(10.0, "USD", "booking-42")
     req = m.writes()[0]
     assert req.url.path == "/v2/checkout/orders"
     assert body(req) == {"intent": "AUTHORIZE", "purchase_units": [
         {"reference_id": "booking-42", "amount": {"currency_code": "USD", "value": "10.00"}}],
         "payment_source": {"paypal": {"experience_context": {
-            "brand_name": "Bright Smile Dental", "shipping_preference": "NO_SHIPPING", "user_action": "CONTINUE",
+            "brand_name": "Clínica Bahía Imaginaria (fictional)", "shipping_preference": "NO_SHIPPING", "user_action": "CONTINUE",
             "return_url": "https://shop.example/chat/return", "cancel_url": "https://shop.example/chat/cancel"}}}}
     assert req.headers["PayPal-Request-Id"]
     assert o.approve_url.endswith("token=5O190127TN364715T") and o.reference == "booking-42"

@@ -18,13 +18,16 @@ from dataclasses import dataclass
 from ask_first import MandateRejected
 
 from ..agent import AgentState, run_turn
-from ..agent.tools import SLOTS
+from ..agent.tools import CURRENCY, DEPOSIT, SLOTS
+from ..business import display_name
 from ..gate import AgentGate, HoldDesk
-from .offline_model import OfflineFrontDeskModel, slot_label
+from .offline_model import NO_NAME, OfflineFrontDeskModel, conversation_name, customer_name, slot_label
 
-BUSINESS = "Bright Smile Dental"
-GOODWILL_REFUND = 4.00
 SLOT_LABELS = [slot_label(s) for s in SLOTS]
+# Fictional customers the scenario buttons speak for, one per booking they make.
+SCENARIO_CUSTOMERS = ("Lucía", "Mateo", "Sofía", "Diego", "Valentina", "Tomás")
+CANCEL_MESSAGE = "I need to cancel, sorry."
+GOODWILL_MESSAGE = "I'm so sorry, my son was in the ER all morning. Can I get my deposit back?"
 
 
 @dataclass
@@ -33,6 +36,18 @@ class Message:
     text: str
     link: str | None = None
     link_label: str | None = None
+    name: str | None = None          # a customer message: the customer's name, as they gave it
+    tools: list | None = None        # an agent reply: the tools the agent called in that turn
+
+
+def turn_tools(messages: list) -> list[str]:
+    """The tools the agent called in one turn, in order, read from its tool_use blocks. Plain
+    strings: the template escapes them like any other text."""
+    names = []
+    for m in messages:
+        if m.get("role") == "assistant" and isinstance(m.get("content"), list):
+            names += [str(b.get("name"))[:40] for b in m["content"] if isinstance(b, dict) and b.get("type") == "tool_use"]
+    return names
 
 
 def default_model_factory():
@@ -50,13 +65,13 @@ class AgentFrontDesk:
         self.model_factory = model_factory or default_model_factory()
         self.model_name = "Claude" if os.environ.get("ANTHROPIC_API_KEY") and model_factory is None else "offline scripted model"
         self.messages: list[Message] = [Message(
-            "business", f"Hi, this is {BUSINESS}. Say \"book\" to reserve a visit. "
-                        "A $10.00 deposit is held on PayPal, not charged.")]
+            "business", f"Hi, this is {display_name()}. Say \"book\" to reserve a visit. "
+                        f"A ${DEPOSIT:.2f} {CURRENCY} deposit is held on PayPal, not charged.")]
         self.conversations: list[AgentState] = []
         self._models: dict[int, object] = {}
         self._linked: set[str] = set()
         self.approve_urls: dict[str, str] = {}     # order id -> payer link, read from tool results
-        self.goodwill: dict[str, float] = {}       # capture mandate id -> refund to ask for after it
+        self.goodwill: dict[str, bool] = {}        # capture mandate id -> the customer then asks for it back
         self.turns = 0
         self.new_conversation()
 
@@ -81,9 +96,12 @@ class AgentFrontDesk:
         """One message to the agent; its replies go to the chat."""
         state = state or self.state
         self.turns += 1
+        start = len(state.messages)
         _, replies = run_turn(state, message, gate=self.gate, desk=self.desk, model=self._models[id(state)])
         for r in replies:
             self.say(r)
+        if replies:                                # the tool-call strip under the turn's last reply
+            self.messages[-1].tools = turn_tools(state.messages[start:]) or None
         self._collect_approve_urls(state)
         for b in state.bookings.values():          # a new order gets its payer link in the chat
             if b["order_id"] and b["order_id"] not in self._linked and b["status"] == "booked":
@@ -114,12 +132,28 @@ class AgentFrontDesk:
         return self.checkout_url(order_id)
 
     # ---- customer text --------------------------------------------------------------------
-    def handle(self, text: str) -> None:
+    def handle(self, text: str, state: AgentState | None = None) -> None:
+        """A message the customer typed (or a scenario typed for them), shown under their name."""
         text = text.strip()
         if not text:
             return
-        self.say(text, "customer")
-        self.turn(text)
+        state = state or self.state
+        name = customer_name(text) or conversation_name(state.messages) or self._booked_name(state)
+        self.messages.append(Message("customer", text, name=name))
+        self.turn(text, state)
+
+    @staticmethod
+    def _booked_name(state: AgentState) -> str | None:
+        return next((b["customer"] for b in reversed(list(state.bookings.values())) if b.get("customer")), None)
+
+    def scenario_customer(self) -> str:
+        """Who a scenario button speaks for: the current conversation's customer, or a new
+        fictional one when that conversation has no name yet."""
+        known = conversation_name(self.state.messages) or self._booked_name(self.state)
+        if known and known != NO_NAME:
+            return known
+        n = sum(len(s.bookings) for s in self.conversations)
+        return SCENARIO_CUSTOMERS[n % len(SCENARIO_CUSTOMERS)]
 
     def latest(self, *statuses: str):
         for s in reversed(self.conversations):
@@ -143,13 +177,15 @@ class AgentFrontDesk:
                           "Confirm the deposit hold.", s)
                 return
 
-    def no_show(self, state: AgentState, booking_id: str, then_refund: float | None = None) -> None:
+    def no_show(self, state: AgentState, booking_id: str, then_goodwill: bool = False) -> None:
+        """The business marks a no-show. With `then_goodwill`, once the owner keeps the deposit
+        the customer writes in and asks for it back (V1's goodwill beat, from the customer's words)."""
         self.say(f"{slot_label(state.bookings[booking_id]['slot'])}: the customer did not show up.", who="system")
         before = set(state.mandates)
         self.turn(f"[business] {booking_id} did not show up. Ask the owner to capture the deposit.", state)
         new = [m for m in state.mandates if m not in before and state.mandates[m]["action"] == "capture_deposit"]
-        if then_refund and new:
-            self.goodwill[new[-1]] = then_refund
+        if then_goodwill and new:
+            self.goodwill[new[-1]] = True
 
     def on_approved(self, mandate_id: str) -> None:
         s = self.owner_of(mandate_id)
@@ -157,11 +193,10 @@ class AgentFrontDesk:
             return
         self.say(f"The owner approved mandate {mandate_id[:8]} on their phone.", who="system")
         self.turn(f"[owner] The owner approved mandate {mandate_id}. Execute it now.", s)
-        refund = self.goodwill.pop(mandate_id, None)
+        goodwill = self.goodwill.pop(mandate_id, False)
         req = s.mandates[mandate_id]
-        if refund and s.bookings[req["booking_id"]].get("capture_id"):
-            self.say(f"Goodwill: the owner wants to give ${refund:.2f} back.", who="system")
-            self.turn(f"[owner] Ask for a goodwill refund of {refund:.2f} USD on {req['booking_id']}.", s)
+        if goodwill and s.bookings[req["booking_id"]].get("capture_id"):
+            self.handle(GOODWILL_MESSAGE, s)
 
     def on_declined(self, mandate_id: str) -> None:
         """The owner said no. To show the gate holds, the agent's own execute tool is tried once."""

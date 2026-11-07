@@ -54,7 +54,7 @@ def test_end_to_end_cancellation_from_the_chat_is_voided_only_after_the_owner_ap
     assert len(spy) == 4                                     # book, paid, cancel, owner approved
     ledger = demo.client.get("/ledger").text
     assert "executed" in ledger and "intact" in ledger
-    assert "nothing needs refunding" in demo.client.get("/chat").text
+    assert "Nothing was charged, so there is nothing to refund." in demo.client.get("/chat").text
 
 
 def test_end_to_end_no_show_capture_then_replay_rejected_on_the_ledger(demo, spy):

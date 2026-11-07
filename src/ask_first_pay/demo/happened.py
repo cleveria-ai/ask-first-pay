@@ -6,6 +6,7 @@ the gate and the ledger recorded, never model text.
 """
 from __future__ import annotations
 
+from ..agent.tools import CURRENCY
 from .offline_model import slot_label
 
 STATUS_TEXT = {
@@ -35,7 +36,7 @@ def mark(demo) -> dict:
 
 
 def _money(x) -> str:
-    return f"{float(x):.2f} USD"
+    return f"{float(x):.2f} {CURRENCY}"
 
 
 def describe(demo, label: str, before: dict) -> dict:
