@@ -144,13 +144,16 @@ All from the offline demo in headless Chromium (`scripts/screenshots.py`), PNG.
 | File | Size | Shows |
 |---|---|---|
 | `docs/screenshots/01-chat-booking.png` | 1280x720 | the customer books; the deposit is held on PayPal, not charged |
-| `docs/screenshots/02-owner-approval.png` | 1280x720 | the owner's phone shows the signed capture mandate; the mandate grid beside it |
+| `docs/screenshots/02-owner-approval.png` | 1280x720 | the owner's approval card ("Keep up to $10.00 of the held deposit", expires in 60 min, approval id = PayPal-Request-Id); the mandate grid beside it |
 | `docs/screenshots/03-ledger-replay.png` | 1280x720 | the replay is rejected; ledger grid with status chips and the row's signed fields |
 | `docs/screenshots/04-cancellation-voided.png` | 1280x720 | a cancellation approved: the hold is voided, nothing charged |
-| `docs/screenshots/05-owner-mobile.png` | 375x812 | the owner's view on a phone |
+| `docs/screenshots/05-owner-mobile.png` | 375x812 | the owner's phone: the no-show card with Approve above the fold |
 | `docs/screenshots/06-ledger-mobile.png` | 375x812 | the ledger grid and row detail on a phone |
 | `docs/screenshots/07-chat-mobile.png` | 375x812 | the chat on a phone |
 | `docs/screenshots/08-ledger-dark.png` | 1280x720 | the ledger in dark mode |
+| `docs/screenshots/09-owner-void-mobile.png` | 375x812 | a cancellation card: "Moves $0.00 · releases the $10.00 hold" |
+| `docs/screenshots/10-owner-today-mobile.png` | 375x812 | the Today panel at the end of the day: "$0.00 moved without your signature", computed from the ledger |
+| `docs/screenshots/11-owner-today-dark.png` | 375x812 | the Today panel in dark mode |
 
 ## Built with
 

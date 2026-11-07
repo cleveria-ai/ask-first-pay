@@ -50,7 +50,9 @@
       detail: function (r) {
         return {title: 'Mandate ' + r.short + ' · ' + r.state, fields: [
           ['jti', r.id], ['action', r.action], ['recipient', r.resource], ['cap', 'USD ' + r.cap],
-          ['created', r.created_text], ['expires', r.exp_text], ['plan_hash', r.plan_hash],
+          ['asked', r.created_text], ['expires', r.exp_text], ['plan_hash', r.plan_hash],
+          ['sent to PayPal as', r.state === 'used' ? 'PayPal-Request-Id: ' + r.id : 'not sent (never executed)'],
+          ['PayPal returned', r.paypal || '—'],
           ['ledger rows', (r.ledger && r.ledger.length) ? r.ledger.map(function (n) { return '#' + n; }).join(', ') : 'none yet']],
           links: (r.ledger || []).map(function (n) { return ['ledger row #' + n, '/ledger/entry/' + n]; }),
           raw: r.canonical, rawLabel: 'Exact bytes the owner signs (RFC 8785 canonical JSON)'};
@@ -77,7 +79,10 @@
         var s = r.signed || {};
         return {title: 'Ledger row #' + r.n + ' · ' + r.result + (r.reason ? ' · ' + r.reason : ''), fields: [
           ['time', r.ts_iso], ['result', r.result + (r.reason ? ' (' + r.reason + ')' : '')],
-          ['mandate jti', r.mandate_id], ['action', r.action], ['recipient', r.resource],
+          ['mandate jti', r.mandate_id],
+          ['sent to PayPal as', r.request_id ? 'PayPal-Request-Id: ' + r.request_id : 'not sent: the gate refused it before PayPal'],
+          ['PayPal returned', r.paypal_id || '—'],
+          ['action', r.action], ['recipient', r.resource],
           ['amount', r.amount ? 'USD ' + r.amount : '—'],
           ['signed cap', s.cap !== undefined ? 'USD ' + Number(s.cap).toFixed(2) : '—'],
           ['signed by', (s.iss || '?') + ' for ' + (s.sub || '?')],

@@ -14,6 +14,10 @@ real WebCrypto flow, plays the stories by pressing the real buttons and saves PN
   05-owner-mobile.png        the owner's view at 375 px
   06-ledger-mobile.png       the ledger at 375 px
   07-chat-mobile.png         the chat at 375 px
+  08-ledger-dark.png         the ledger in dark mode (--dark)
+  09-owner-void-mobile.png   the cancellation card at 375 px: "Moves $0.00 · releases the $10.00 hold"
+  10-owner-today-mobile.png  the Today panel at the end of the day (the video's end card)
+  11-owner-today-dark.png    the same in dark mode (--dark)
 """
 from __future__ import annotations
 
@@ -103,19 +107,39 @@ def main(argv=None) -> int:
         shot("06-ledger-mobile.png", PHONE, scroll_to="[data-toolbar=ledger]")
         page.set_viewport_size(DESKTOP)
 
-        # 4. cancellation: void approved, nothing charged
+        # 4. cancellation: the void card on the phone, then approved: nothing charged
         go("/chat")
         page.get_by_role("button", name="Cancellation").click()
         page.wait_for_load_state("networkidle")
+        shot("09-owner-void-mobile.png", PHONE)
+        page.set_viewport_size(DESKTOP)
         approve_first()
         go("/chat")
         shot("04-cancellation-voided.png")
+
+        # 5. the rest of the day: goodwill (keep, then give part back) and one request declined
+        go("/chat")
+        page.get_by_role("button", name="Goodwill").click()
+        page.wait_for_load_state("networkidle")
+        approve_first()                                   # the capture
+        approve_first()                                   # the refund the owner chose to give
+        go("/chat")
+        page.get_by_role("button", name="No-show").click()
+        page.wait_for_load_state("networkidle")
+        go("/owner")
+        page.locator(".mandate .decline").first.click()
+        page.wait_for_timeout(900)
+        go("/owner")
+        shot("10-owner-today-mobile.png", PHONE, scroll_to="#today")
+        page.set_viewport_size(DESKTOP)
 
         if args.dark:
             dctx = browser.new_context(viewport=DESKTOP, color_scheme="dark")
             page = dctx.new_page()
             go("/ledger#n=2")
             shot("08-ledger-dark.png")
+            go("/owner")
+            shot("11-owner-today-dark.png", PHONE, scroll_to="#today")
         browser.close()
     server.should_exit = True
     return 0

@@ -47,7 +47,7 @@
 {% endif %}
 <div class="card detail" id="ledger-detail" hidden aria-live="polite"></div>
 </div>
-<p class="built">Table: AG Grid Community (vendored, MIT): sort any column, filter by result or action, search, export CSV, tap a row for its signed fields.</p>
+<p class="built">{% if not video %}Table: AG Grid Community (vendored, MIT): sort{% else %}Sort{% endif %} any column, filter by result or action, search, export CSV, tap a row for its signed fields and the PayPal-Request-Id.</p>
 <script type="application/json" id="ledger-data">{{ rows | tojson }}</script>
 <h2>Try to break it</h2>
 <form method="post" action="/replay"><button class="btn danger" type="submit">Agent tries to replay the last mandate</button></form>

@@ -33,20 +33,29 @@ from ..agent.state import AgentState
 from ..agent.tools import SLOTS
 from ..store import SqliteStore
 from ..gate import AgentGate, HoldDesk, OwnerSide, make_engine
-from . import happened
+from . import happened, owner_view
 from .front import BUSINESS, GOODWILL_REFUND, SLOT_LABELS, AgentFrontDesk, Message
 
 HERE = Path(__file__).parent
 PAIRING_TTL_S = 3600
 # The owner's headline is chosen by the SIGNED action and filled with the SIGNED cap: plain words,
 # still nothing the model wrote.
-HEADLINES = {"capture_deposit": "Keep up to ${cap} of the held deposit (no-show)",
-             "void_deposit": "Release the held deposit; nothing is charged (cancellation)",
-             "refund_deposit": "Give back up to ${cap} of the captured deposit (goodwill)"}
+# (owner_view.card has the words.)
 STATE_TONE = {"pending": "warn", "approved": "info", "used": "ok", "declined": "bad", "expired": "neutral"}
 SIGNED_FIELDS = ("jti", "iss", "sub", "action", "recipient", "cap", "created", "exp", "plan_hash")
 SCENARIO_LABELS = {"no_show": "no-show", "cancel": "cancellation", "goodwill": "no-show with goodwill refund"}
 ORDER_TOKEN_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")      # PayPal's ?token= on return_url / cancel_url
+
+
+def video_safe() -> bool:
+    """ASK_FIRST_VIDEO=1: no third-party brand but PayPal on screen (contest rule on marks)."""
+    return os.environ.get("ASK_FIRST_VIDEO", "").strip() in ("1", "true", "yes")
+
+
+def model_label(model_name: str, video: bool) -> str:
+    if not video:
+        return model_name
+    return "offline scripted model" if model_name == "offline scripted model" else "live LLM, tool use"
 
 
 class DemoState:
@@ -67,6 +76,8 @@ class DemoState:
         self.desk = HoldDesk(self.provider)
         self.front = AgentFrontDesk(self.agent, self.desk, self.checkout_url, model_factory)
         self.paired_key: str | None = None
+        self.owner_keys: list[str] = []        # every key this shop paired: old approvals stay verifiable
+        self.paypal_results: dict[str, dict] = {}   # mandate jti -> the id PayPal returned for it
         self.declined: set[str] = set()
         self.scenario_used: set[str] = set()   # held bookings a scenario already acted on
         self.lock = threading.RLock()
@@ -78,6 +89,7 @@ class DemoState:
         self._track_ledger_head()
         if store is not None and (snap := store.load()) is not None:
             self.restore(snap)
+        self.engine.executor = self._recording(self.engine.executor)
         if store is not None:
             self.engine.executor = self._saved_before(self.engine.executor)
 
@@ -94,6 +106,17 @@ class DemoState:
                 self.ledger_head = {"n": out["n"], "hash": out["hash"]}
             return out
         ledger.append = tracked
+
+    def _recording(self, executor):
+        """Remember what PayPal answered for each mandate (capture id, refund id, voided hold), so
+        the ledger detail can show one tap -> one PayPal-Request-Id -> one PayPal id."""
+        def run(mandate, requested):
+            out = executor(mandate, requested)
+            found = owner_view.paypal_result(requested.get("action"), out)
+            if found:
+                self.paypal_results[mandate["jti"]] = found
+            return out
+        return run
 
     def _saved_before(self, executor):
         """The engine marks a mandate used, then calls PayPal. Save that mark first, so a crash
@@ -123,7 +146,8 @@ class DemoState:
         return {"version": 1, "simulated": self.simulated,
                 "engine": {"pending": e.pending, "approved": e.approved, "used": sorted(e.used)},
                 "ledger_head": self.ledger_head,
-                "paired_key": self.paired_key, "declined": sorted(self.declined),
+                "paired_key": self.paired_key, "owner_keys": list(self.owner_keys),
+                "paypal_results": dict(self.paypal_results), "declined": sorted(self.declined),
                 "scenario_used": sorted(self.scenario_used),
                 "front": {"messages": [asdict(m) for m in f.messages],
                           "conversations": [asdict(s) for s in f.conversations],
@@ -154,6 +178,8 @@ class DemoState:
         self.paired_key = snap["paired_key"]
         if self.paired_key:
             e.person_pub = public_key_from_hex(self.paired_key)
+        self.owner_keys = [str(k) for k in snap.get("owner_keys") or ([self.paired_key] if self.paired_key else [])]
+        self.paypal_results = {str(k): dict(v) for k, v in (snap.get("paypal_results") or {}).items()}
         self.declined, self.scenario_used = set(snap["declined"]), set(snap["scenario_used"])
         fr = snap["front"]
         f.messages = [Message(**m) for m in fr["messages"]]
@@ -313,8 +339,15 @@ class DemoState:
             return True
 
     # ---- owner side
+    def pair(self, code: str, public_key: str) -> str:
+        self.paired_key = self.owner.pair(code, public_key)
+        if self.paired_key not in self.owner_keys:
+            self.owner_keys.append(self.paired_key)
+        return self.paired_key
+
     def mandate_rows(self) -> list[dict]:
-        """Every mandate the agent asked for, with the owner-facing text built from signed fields."""
+        """Every mandate the agent asked for, oldest first (it expires first), with the owner-facing
+        text built from signed fields and the booking that owns the signed PayPal resource."""
         rows = []
         entries = self.agent.view_ledger()["entries"]
         for jti in list(self.owner.pending):
@@ -322,17 +355,36 @@ class DemoState:
             if m is None:
                 continue
             state = "declined" if jti in self.declined and m["_state"] == "pending" else m["_state"]
+            if state == "pending" and int(time.time()) > int(m["exp"]):
+                state = "expired"                       # the gate would refuse it: do not offer Approve
+            c = owner_view.card(m, owner_view.booking_for(self.front, m["recipient"]))
             rows.append({"id": jti, "short": jti[:8], "state": state, "action": m["action"],
-                         "headline": HEADLINES.get(m["action"], m["action"]).format(cap=f"{m['cap']:.2f}"),
-                         "resource": m["recipient"], "cap": f"{m['cap']:.2f}", "exp": m["exp"],
-                         "exp_text": time.strftime("%H:%M:%S UTC", time.gmtime(m["exp"])),
+                         "kicker": c["kicker"], "headline": c["headline"], "chip": c["chip"], "who": c["who"],
+                         "resource": m["recipient"], "cap": f"{m['cap']:.2f}", "cap_text": c["cap_text"],
+                         "exp": m["exp"], "exp_left": c["exp_left"],
+                         "exp_text": f"{c['exp_clock']} ({c['exp_left'] if c['exp_left'] == 'expired' else 'in ' + c['exp_left']})",
                          "description": self.agent.describe(jti),
                          "canonical": canonical(self.owner.pending[jti]).decode("utf-8"),
                          "tone": STATE_TONE.get(state, "neutral"),
-                         "created_text": time.strftime("%H:%M:%S UTC", time.gmtime(m["created"])),
+                         "created_text": c["created_clock"],
                          "plan_hash": m.get("plan_hash", ""),
+                         "paypal": owner_view.paypal_text(self.paypal_results.get(jti)),
                          "ledger": [e.get("n") for e in entries if e.get("mandate_id") == jti]})
         return rows
+
+    def today(self) -> dict:
+        return owner_view.today(self)
+
+    def pending_signal(self) -> dict:
+        """All the phone's poll needs to buzz: how many requests wait for the owner now, and how
+        many the agent has ever asked for (a counter that only grows). No ids, no PayPal
+        resources, no amounts, no signed bytes: the card itself is rendered by /owner."""
+        now, waiting = int(time.time()), 0
+        for jti in list(self.owner.pending):
+            m = self.owner.get(jti)
+            if m and m["_state"] == "pending" and jti not in self.declined and now <= int(m["exp"]):
+                waiting += 1
+        return {"waiting": waiting, "asked": len(self.owner.pending)}
 
     def approve(self, mandate_id: str, signature: str) -> None:
         """Only a mandate still waiting can be approved: a decline is final, and approving twice
@@ -365,6 +417,8 @@ class DemoState:
             # fields), so "rejected · replay" reads as "a second capture of AUTH-… was refused".
             m = self.owner.get(str(e.get("mandate_id", ""))) or {}
             amount = e["amount"] if "amount" in e else m.get("cap")
+            mid = str(e.get("mandate_id", ""))
+            paid = self.paypal_results.get(mid) if e.get("result") == "executed" else None
             rows.append({"n": e.get("n"), "time": time.strftime("%H:%M:%S", time.gmtime(e.get("ts", 0))),
                          "result": e.get("result"), "reason": e.get("reason") or "",
                          "mandate": str(e.get("mandate_id", ""))[:8],
@@ -377,6 +431,10 @@ class DemoState:
                          "plan_hash": e.get("plan_hash", ""),
                          "ts_iso": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(e.get("ts", 0))),
                          "tone": "ok" if e.get("result") == "executed" else "bad",
+                         # the gate called PayPal (executed or failed) with the mandate jti as the
+                         # PayPal-Request-Id; a rejected attempt never reached PayPal
+                         "request_id": mid if e.get("result") in ("executed", "failed") else "",
+                         "paypal_id": owner_view.paypal_text(paid),
                          "signed": {k: m[k] for k in SIGNED_FIELDS if k in m}})
         v = dict(led["verification"])
         head = self.ledger_head
@@ -420,6 +478,8 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     """`model_factory(conversation_state) -> model`; default: Claude with a key, else offline."""
     state = DemoState(provider if provider is not None else default_provider(), ledger_path, model_factory,
                       store if store is not None else default_store())
+    if (zone_note := owner_view.zone_status()[1]):
+        print(f"[demo] {zone_note} The owner page says so too.")
     app = FastAPI(title="Ask First Pay demo")
     app.state.demo = state
 
@@ -453,7 +513,9 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     templates = Jinja2Templates(directory=HERE / "templates")
 
     def page(request: Request, name: str, **ctx):
-        base = {"business": BUSINESS, "state": state, "simulated": state.simulated, "last": state.last}
+        video = video_safe()
+        base = {"business": BUSINESS, "state": state, "simulated": state.simulated, "last": state.last,
+                "video": video, "model_label": model_label(state.front.model_name, video)}
         return templates.TemplateResponse(request, name, {**base, **ctx})
 
     @app.get("/favicon.ico", include_in_schema=False)
@@ -471,8 +533,7 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     # ---- customer chat
     @app.get("/chat", response_class=HTMLResponse)
     def chat(request: Request):
-        return page(request, "chat.html", nav="chat", messages=state.front.messages, slots=SLOT_LABELS,
-                    model_name=state.front.model_name)
+        return page(request, "chat.html", nav="chat", messages=state.front.messages, slots=SLOT_LABELS)
 
     @app.post("/chat/send")
     async def chat_send(request: Request):
@@ -563,8 +624,14 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
     @app.get("/owner", response_class=HTMLResponse)
     def owner(request: Request):
         rows = state.mandate_rows()
-        return page(request, "owner.html", nav="owner", rows=rows,
-                    pending=[r for r in rows if r["state"] == "pending"], paired=state.paired_key)
+        return page(request, "owner.html", nav="owner", rows=rows, today=state.today(),
+                    pending=[r for r in rows if r["state"] == "pending"], paired=state.paired_key,
+                    signal=state.pending_signal())
+
+    @app.get("/owner/api/pending")
+    def owner_pending_signal():
+        """What owner.js polls every few seconds (see DemoState.pending_signal)."""
+        return JSONResponse(state.pending_signal(), headers={"Cache-Control": "no-store"})
 
     @app.get("/owner/api/mandates")
     def owner_api():
@@ -576,8 +643,7 @@ def create_app(provider=None, ledger_path: str | None = None, model_factory=None
         try:
             with state.action("This phone was paired with the shop") as box:
                 try:
-                    state.paired_key = state.owner.pair(str(body.get("code", "")).strip(),
-                                                        str(body.get("public_key", "")))
+                    state.pair(str(body.get("code", "")).strip(), str(body.get("public_key", "")))
                 except MandateRejected as e:
                     box["label"] = f"Pairing refused: {e.reason}"
                     raise
