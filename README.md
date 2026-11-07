@@ -65,6 +65,13 @@ same tools; with it, Claude chooses the tools (`ASK_FIRST_MODEL` overrides the m
 checkout approval reaches the agent as a signed `CHECKOUT.ORDER.APPROVED` that is verified
 before anything happens.
 
+The business is fictional: `ASK_FIRST_BUSINESS` names it (default `Clínica Bahía Imaginaria`), and
+every screen, the model's prompt and PayPal's `brand_name` show it followed by "(fictional)".
+`ASK_FIRST_CURRENCY` (default `USD`) is the deposit's currency on the PayPal order and on screen;
+other currencies are untested against the sandbox. Customers book under their own name ("I'm
+Lucía, book Mon 16 Nov 09:00") and can write in Spanish ("Hola, soy Lucía. Quiero reservar lunes
+9:00", "cancelo", "¿me devuelven el depósito?"); the agent answers in their language.
+
 State lives in memory by default. `ASK_FIRST_DB=/path/shop.sqlite` (optionally
 `ASK_FIRST_SHOP=<id>`) keeps it in SQLite across restarts: bookings, mandates, signed approvals,
 declines, the paired key, handled webhook ids and, above all, which mandates are already used, so
