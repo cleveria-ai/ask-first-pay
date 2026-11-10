@@ -35,7 +35,7 @@ owner can add with one command.
 |---|---|---|
 | K1 | the whole suite is green | `.venv/bin/python -m pytest -q` |
 | K2 | the video exists, is 1920x1080 and under 2:45 | `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 docs/video/out/ask_first_pay.mp4 \| grep -q "^1920,1080$" && test $(ffprobe -v error -show_entries format=duration -of csv=p=0 docs/video/out/ask_first_pay.mp4 \| cut -d. -f1) -lt 165` |
-| K3 | it has an audio track (silent is fine) and H.264 video | `ffprobe -v error -show_entries stream=codec_name -of csv=p=0 docs/video/out/ask_first_pay.mp4 \| tr '\n' ' ' \| grep -q "h264.*aac\|aac.*h264"` |
+| K3 | it has an audio track (silent is fine) and H.264 video | `ffprobe -v error -show_entries stream=codec_name -of csv=p=0 docs/video/out/ask_first_pay.mp4 \| tr '\n' ' ' \| grep -qE "h264.*aac\|aac.*h264"` |
 | K4 | the assembly script is tested offline | `.venv/bin/python -m pytest -q -k make_video` |
 | K5 | the contact sheet exists | `test -s docs/video/out/contact_sheet.png` |
 | K6 | the voice-over guide has the mix command and public YouTube settings | `grep -q "ffmpeg" docs/video/VOICE_OVER.md && grep -q "Public" docs/video/VOICE_OVER.md` |
