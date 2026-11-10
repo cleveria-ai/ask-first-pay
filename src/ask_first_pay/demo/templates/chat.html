@@ -10,8 +10,9 @@
 <section aria-label="Conversation with the front desk">
 <ol class="chat scroll" aria-label="Conversation" tabindex="0">
 {% for m in messages %}
-  <li class="msg {{ m.who }}"><span class="who">{{ {'customer': 'You', 'business': business, 'system': 'Note'}[m.who] }}</span>
+  <li class="msg {{ m.who }}"><span class="who">{{ (m.name or 'Customer') if m.who == 'customer' else {'business': business, 'system': 'Note'}[m.who] }}</span>
     <p>{{ m.text }}</p>
+    {% if m.tools %}<p class="built tools"><span class="sr">Tools the agent called: </span>{{ m.tools | join(' → ') }}</p>{% endif %}
     {% if m.link %}<a class="btn small" href="{{ m.link }}">{{ m.link_label or 'Open' }}</a>{% endif %}
   </li>
 {% endfor %}
@@ -20,7 +21,7 @@
 <form class="composer" method="post" action="/chat/send">
   <label for="message">Message</label>
   <input id="message" name="message" type="text" maxlength="500" autocomplete="off"
-         placeholder="book {{ slots[0] }}" required>
+         placeholder="I'm Lucía, book {{ slots[0] }}" required>
   <button class="btn" type="submit">Send</button>
 </form>
 <ul class="quick" aria-label="Quick messages">
@@ -36,7 +37,7 @@
 <div class="actions">
   <form method="post" action="/scenario/no_show"><button class="btn secondary" type="submit">No-show<small>capture the held deposit</small></button></form>
   <form method="post" action="/scenario/cancel"><button class="btn secondary" type="submit">Cancellation<small>void the hold, nothing charged</small></button></form>
-  <form method="post" action="/scenario/goodwill"><button class="btn secondary" type="submit">Goodwill<small>capture, then refund part</small></button></form>
+  <form method="post" action="/scenario/goodwill"><button class="btn secondary" type="submit">Goodwill<small>capture, then the customer asks for it back</small></button></form>
 </div>
 </section>
 </div>

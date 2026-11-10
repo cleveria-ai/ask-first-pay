@@ -10,13 +10,16 @@ from datetime import datetime, timezone
 
 from ask_first import MandateRejected
 
+from ..business import currency
 from ..gate import AgentGate, HoldDesk
 from ..ports import ProviderError
 from .state import AgentState
 
 SLOTS = ["2026-11-16 09:00", "2026-11-16 11:30", "2026-11-17 15:00", "2026-11-18 10:00"]
 DEPOSIT = 10.00
-CURRENCY = "USD"
+CURRENCY = currency()          # ASK_FIRST_CURRENCY, default USD (business.py)
+# Not names: a booking is made under the customer's own name, which the owner decides from.
+PLACEHOLDER_NAMES = frozenset({"", "customer", "the customer", "client", "cliente", "unknown", "name", "you"})
 # What PayPal answers a reauthorize with when the CURRENT hold is untouched (Payments v2 spec,
 # https://developer.paypal.com/api/payments/v2/schema.json): too soon (inside the 3-day honor
 # period), or this authorization cannot be reauthorized (it already is a reauthorization, or the
@@ -86,6 +89,9 @@ class Toolbox:
 
     # free tools -------------------------------------------------------------------------
     def t_book_slot(self, customer: str, slot: str) -> dict:
+        customer = " ".join(str(customer).split())[:60]
+        if customer.lower() in PLACEHOLDER_NAMES:
+            return {"error": "book under the customer's own name: ask for it if you do not know it"}
         if slot not in SLOTS:
             return {"error": "slot not available", "available": SLOTS}
         if any(b["slot"] == slot and b["status"] != "cancelled" for b in self.s.bookings.values()):

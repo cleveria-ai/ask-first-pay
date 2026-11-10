@@ -71,6 +71,7 @@ def test_paypal_create_order_request_id_without_caller_key_is_random_never_deriv
 def test_paypal_experience_context_has_return_url_and_no_shipping(monkeypatch):
     monkeypatch.setenv("ASK_FIRST_PUBLIC_URL", "https://demo.example/")
     monkeypatch.delenv("ASK_FIRST_BRAND", raising=False)
+    monkeypatch.delenv("ASK_FIRST_BUSINESS", raising=False)
     p, mock = provider()
     o = p.create_order(10.0, "USD", "booking-1")
     ctx = json.loads(order_posts(mock)[0].content)["payment_source"]["paypal"]["experience_context"]
@@ -78,7 +79,7 @@ def test_paypal_experience_context_has_return_url_and_no_shipping(monkeypatch):
     assert ctx["cancel_url"] == "https://demo.example/chat/cancel"
     assert ctx["shipping_preference"] == "NO_SHIPPING"
     assert ctx["user_action"] == "CONTINUE"                 # nothing is charged on PayPal's button
-    assert ctx["brand_name"] == "Bright Smile Dental"
+    assert ctx["brand_name"] == "Clínica Bahía Imaginaria (fictional)"    # the default fictional business
     assert o.approve_url.startswith("https://www.sandbox.paypal.com/checkoutnow?token=")
 
 
@@ -87,7 +88,7 @@ def test_paypal_experience_context_brand_and_url_are_configurable(monkeypatch):
     p, mock = provider(brand_name="Clinica Sonrisa", public_url="http://127.0.0.1:9000")
     p.create_order(10.0, "USD", "b")
     ctx = json.loads(order_posts(mock)[0].content)["payment_source"]["paypal"]["experience_context"]
-    assert ctx["brand_name"] == "Clinica Sonrisa" and ctx["return_url"] == "http://127.0.0.1:9000/chat/return"
+    assert ctx["brand_name"] == "Clinica Sonrisa (fictional)" and ctx["return_url"] == "http://127.0.0.1:9000/chat/return"
     q, mock2 = provider()
     q.create_order(10.0, "USD", "b")
     ctx2 = json.loads(order_posts(mock2)[0].content)["payment_source"]["paypal"]["experience_context"]

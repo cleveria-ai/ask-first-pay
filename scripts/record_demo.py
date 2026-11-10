@@ -215,7 +215,7 @@ def record(base: str, code: str, simulated: bool, only: set[int] | None) -> None
                     s.beat(4)
                     s.card(architecture_html())
                 elif n == 3:
-                    s.say("book Mon 16 Nov 09:00")
+                    s.say("Hi, I'm Lucía. book Mon 16 Nov 09:00")
                     s.beat(2.5)
                     s.chat.get_by_role("link", name="Hold the deposit").last.click()
                     s.beat(3)

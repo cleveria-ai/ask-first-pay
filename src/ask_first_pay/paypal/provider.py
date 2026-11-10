@@ -23,6 +23,7 @@ from typing import Any
 
 import httpx
 
+from ..business import business_name, mark_fictional
 from ..ports import Authorization, Capture, Order, ProviderError, Refund
 
 BASES = {
@@ -31,7 +32,6 @@ BASES = {
 }
 TOKEN_MARGIN_S = 60
 DEFAULT_PUBLIC_URL = "http://localhost:8000"     # where the demo runs; ASK_FIRST_PUBLIC_URL overrides it
-DEFAULT_BRAND = "Bright Smile Dental"            # fictional business; ASK_FIRST_BRAND overrides it
 
 
 def format_amount(amount: float) -> str:
@@ -68,7 +68,9 @@ class PayPalProvider:
         self._clock = clock
         base = (public_url or os.environ.get("ASK_FIRST_PUBLIC_URL") or DEFAULT_PUBLIC_URL).rstrip("/")
         self.return_url, self.cancel_url = f"{base}/chat/return", f"{base}/chat/cancel"
-        self.brand_name = (brand_name or os.environ.get("ASK_FIRST_BRAND") or DEFAULT_BRAND)[:127]
+        # The business from ASK_FIRST_BUSINESS (ASK_FIRST_BRAND or the argument override it). The
+        # "(fictional)" marker goes on after every source is resolved, inside PayPal's 127 chars.
+        self.brand_name = mark_fictional(brand_name or os.environ.get("ASK_FIRST_BRAND") or business_name(), 127)
         self._token: str | None = None
         self._token_until = 0.0
         self._auth_info: dict[str, tuple[str, str, str]] = {}   # auth id -> (order_id, amount, currency)

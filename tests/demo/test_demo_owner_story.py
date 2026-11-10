@@ -76,7 +76,7 @@ def test_owner_card_human_time_on_the_page_has_no_epoch_and_no_utc(demo, monkeyp
     exp_local = datetime.fromtimestamp(m["exp"], tz)
     expected = f"{exp_local:%a} {exp_local.hour % 12 or 12}:{exp_local.minute:02d} {'a.m.' if exp_local.hour < 12 else 'p.m.'}"
     assert expected in shown and re.search(CLOCK, shown)
-    assert "Appointment Mon 16 Nov, 9:00 a.m." in shown               # the booking that owns the signed hold
+    assert "Lucía · Mon 16 Nov, 9:00 a.m." in shown                   # the booking that owns the signed hold (N10: real name)
     # the all-mandates table (no-JS fallback and the grid data) speaks the same way
     table = text_of(page[page.index('<table class="plain">'):page.index("</table>")])
     assert "UTC" not in table and str(m["exp"]) not in table and "(in 60 min)" in table
@@ -175,7 +175,7 @@ def test_void_card_moves_zero_while_capture_and_refund_are_irreversible(demo):
     demo.approve(cap)
     (ref,) = demo.pending_ids()
     ref_card = text_of(card_html(demo.client.get("/owner").text, ref))
-    assert "Irreversible · needs your signature" in ref_card and "Give back up to $4.00 of the captured deposit" in ref_card
+    assert "Irreversible · needs your signature" in ref_card and "Give back up to $10.00 of the captured deposit" in ref_card
     assert "Moves $0.00" not in ref_card
 
 
@@ -241,7 +241,7 @@ def test_today_panel_is_computed_from_the_ledger_and_bookings(demo):
     executed = [e for e in entries if e["result"] == "executed"]
     # independent oracles: the provider's own call log and the raw ledger rows
     assert t["kept"] == f"${sum(c[2] for c in demo.calls('capture')):.2f}" == "$20.00"
-    assert t["given_back"] == f"${sum(c[2] for c in demo.calls('refund')):.2f}" == "$4.00"
+    assert t["given_back"] == f"${sum(c[2] for c in demo.calls('refund')):.2f}" == "$10.00"                    # N10: goodwill asks for what is still captured
     assert t["released"] == "$10.00" and len(demo.calls("void")) == 1
     assert t["refused"] == sum(1 for e in entries if e["result"] == "rejected") == 2   # the replay + the declined try
     assert "replay 1" in t["refused_reasons"] and "not approved 1" in t["refused_reasons"]
@@ -253,7 +253,7 @@ def test_today_panel_is_computed_from_the_ledger_and_bookings(demo):
     shown = today_text(demo.client.get("/owner").text)
     assert "$0.00 moved without your signature" in shown
     assert f"{t['agent_calls']} PayPal calls · $0.00 moved" in shown and "5 taps" in shown
-    assert "4 approved · 1 declined" in shown and "Kept $20.00" in shown and "Given back $4.00" in shown
+    assert "4 approved · 1 declined" in shown and "Kept $20.00" in shown and "Given back $10.00" in shown
     assert "Released $10.00" in shown and "Refused 2" in shown
     assert f"Checked against all {len(entries)} ledger rows; chain intact." in shown
 

@@ -101,7 +101,8 @@ def card(m: dict, booking: dict | None) -> dict:
     if booking:
         name = str(booking.get("customer") or "").strip()
         when = slot_text(booking.get("slot", ""))
-        who = f"{name} · {when}" if name and name.lower() != "customer" else f"Appointment {when}"
+        placeholder = name.lower() in ("customer", "guest (no name given)")       # N10 stores this when unnamed
+        who = f"{name} · {when}" if name and not placeholder else f"Appointment {when}"
     cap_text = (f"USD {cap:.2f} (symbolic: a void moves no money, the engine needs an amount)"
                 if action == "void_deposit" else f"USD {cap:.2f}")
     return {"kicker": KICKER.get(action, "Request"), "headline": headline, "chip": chip, "who": who,
