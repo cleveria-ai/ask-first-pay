@@ -1,6 +1,6 @@
 # Ask First Pay
 
-**Tagline:** Clinic owners ask one thing about an AI front desk: can it touch my money? It can hold a PayPal deposit. Only the owner's tap moves it.
+**Tagline:** "Can it touch my money?" An AI front desk for clinics that can hold a PayPal deposit on its own. Only the owner's tap moves it.
 
 ## Inspiration
 
