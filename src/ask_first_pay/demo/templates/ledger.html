@@ -38,7 +38,7 @@
   <table class="plain">
     <caption class="sr">Every attempt to use a mandate, newest first</caption>
     <thead><tr><th scope="col">#</th><th scope="col">Time (UTC)</th><th scope="col">Result</th><th scope="col">Reason</th><th scope="col">Mandate</th><th scope="col">Action</th><th scope="col">Resource</th><th scope="col">Amount</th><th scope="col">Hash</th></tr></thead>
-    <tbody>{% for r in rows %}<tr class="{{ r.result }}"><td>{{ r.n }}</td><td>{{ r.time }}</td><td><span class="chip {{ r.tone }}">{{ r.result }}</span></td><td>{{ r.reason }}</td><td>{{ r.mandate }}</td><td>{{ r.action }}</td><td>{{ r.resource }}</td><td>{{ r.amount }}</td><td><a href="/ledger/entry/{{ r.n }}"><code>{{ r.hash }}</code></a></td></tr>{% endfor %}</tbody>
+    <tbody>{% for r in rows %}<tr class="{{ r.result }}"><td>{{ r.n }}</td><td>{{ r.time }}</td><td><span class="chip {{ r.tone }}">{{ r.result }}</span></td><td>{{ r.reason }}</td><td>{{ r.mandate }}</td><td>{{ r.action }}</td><td>{{ r.resource }}</td><td>{{ r.amount_text }}</td><td><a href="/ledger/entry/{{ r.n }}"><code>{{ r.hash }}</code></a></td></tr>{% endfor %}</tbody>
   </table>
 </div>
 {% else %}

@@ -421,12 +421,16 @@ class DemoState:
             amount = e["amount"] if "amount" in e else m.get("cap")
             mid = str(e.get("mandate_id", ""))
             paid = self.paypal_results.get(mid) if e.get("result") == "executed" else None
+            action = e.get("action") or m.get("action", "")
+            amount_s = f"{amount:.2f}" if amount is not None else ""
+            # a void moves no money; its amount is only the symbolic cap the owner signed
+            amount_text = f"0.00 moved (cap {amount_s})" if action == "void_deposit" and amount_s else amount_s
             rows.append({"n": e.get("n"), "time": time.strftime("%H:%M:%S", time.gmtime(e.get("ts", 0))),
                          "result": e.get("result"), "reason": e.get("reason") or "",
                          "mandate": str(e.get("mandate_id", ""))[:8],
-                         "action": e.get("action") or m.get("action", ""),
+                         "action": action,
                          "resource": e.get("recipient") or m.get("recipient", ""),
-                         "amount": f"{amount:.2f}" if amount is not None else "",
+                         "amount": amount_s, "amount_text": amount_text,
                          "hash": e.get("hash", ""),
                          # for the row detail: the full ids, the chain link and the signed fields
                          "mandate_id": str(e.get("mandate_id", "")), "prev": e.get("prev", ""),
