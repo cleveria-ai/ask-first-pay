@@ -9,8 +9,9 @@ stage loads at its head and the recorder pads its tail. The recorder writes NN-s
 seconds; a clip that ends early holds its last frame. Nothing is sped up or slowed down.
 
 The lower thirds, the yellow caption track naming the PayPal calls, the cards and the English
-subtitles for the Spanish lines are already in the clips (record_demo.py draws them); this script
-draws nothing over them. Output: H.264 (yuv420p, 30 fps, 1920x1080) plus a silent AAC track, which
+subtitles for the Spanish lines are already in the clips (record_demo.py draws them). This script
+adds one thing: the narration (docs/video/subtitles.srt), burned into the empty band record_demo.py
+leaves at the bottom, so the video tells the story without a voice. Output: H.264 (yuv420p, 30 fps, 1920x1080) plus a silent AAC track, which
 YouTube accepts; the founder's voice can be mixed in later (docs/video/VOICE_OVER.md). The
 contact sheet shows the last second of every shot, labelled, so the cut can be checked without
 playing it.
@@ -34,6 +35,8 @@ SHEET_NAME = "contact_sheet.png"
 WIDTH, HEIGHT, FPS = 1920, 1080, 30
 LIMIT_S = 165                 # the work order: strictly under 2:45
 TAIL_S = 0.4                  # without a .json: the recorder's tail (last-frame still) is about this
+SRT = ROOT / "docs" / "video" / "subtitles.srt"   # the narration, burned into the bottom band
+BAND_PX = 138                 # the band record_demo.py leaves empty at the bottom (92 CSS px x 1.5)
 FONT = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")   # contact-sheet labels only
 
 
@@ -86,7 +89,23 @@ def plan(shot_rows: list[tuple], raw: Path = RAW, duration=probe_duration) -> li
     return cuts
 
 
-def ffmpeg_command(cuts: list[Cut], out: Path, size=(WIDTH, HEIGHT), fps=FPS) -> list[str]:
+def narration_filter(srt: Path, size=(WIDTH, HEIGHT)) -> str:
+    """The narration as large white text on a near-black box, centred in the bottom band (at most
+    two lines per cue: check_video_assets.py keeps cues to 2 x 42 characters)."""
+    w, h = size
+    k = h / HEIGHT
+    style = ",".join([f"PlayResX={w}", f"PlayResY={h}", "FontName=DejaVu Sans", f"Fontsize={round(44 * k)}",
+                      "PrimaryColour=&H00FFFFFF", "OutlineColour=&H14000000", "BackColour=&H14000000",
+                      "BorderStyle=3", f"Outline={max(1, round(9 * k))}", "Shadow=0", "Alignment=2",
+                      f"MarginV={max(1, round(14 * k))}", "WrapStyle=2"])
+    path = str(srt)
+    if any(c in path for c in ":'\\,;[]"):          # characters ffmpeg's filter syntax would read
+        raise SystemExit(f"move the subtitles to a plain path (no : ' \\ , ; [ ]): {path}")
+    return f"subtitles=filename='{path}':force_style='{style}'"
+
+
+def ffmpeg_command(cuts: list[Cut], out: Path, size=(WIDTH, HEIGHT), fps=FPS,
+                   srt: Path | None = SRT) -> list[str]:
     w, h = size
     cmd = ["ffmpeg", "-v", "error", "-y"]
     for c in cuts:            # input-side seek: decode from the shot's start, read no more than it needs
@@ -101,7 +120,8 @@ def ffmpeg_command(cuts: list[Cut], out: Path, size=(WIDTH, HEIGHT), fps=FPS) ->
             f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=0x0f1720,setsar=1,format=yuv420p,"
             f"tpad=stop_mode=clone:stop_duration={c.seconds},trim=duration={c.seconds},"
             f"setpts=PTS-STARTPTS[v{i}]")
-    parts.append("".join(f"[v{i}]" for i in range(len(cuts))) + f"concat=n={len(cuts)}:v=1:a=0[v]")
+    burn = f",{narration_filter(srt, size)}" if srt is not None else ""
+    parts.append("".join(f"[v{i}]" for i in range(len(cuts))) + f"concat=n={len(cuts)}:v=1:a=0{burn}[v]")
     cmd += ["-filter_complex", ";".join(parts), "-map", "[v]", "-map", f"{len(cuts)}:a",
             "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p", "-r", str(fps),
             "-c:a", "aac", "-b:a", "128k", "-t", str(total), "-movflags", "+faststart", str(out)]
@@ -136,13 +156,13 @@ def sheet_command(cuts: list[Cut], video: Path, out: Path, tile=(960, 540), cols
 
 
 def make(raw: Path = RAW, out_dir: Path = OUT, shot_rows: list[tuple] | None = None,
-         size=(WIDTH, HEIGHT), tile=(960, 540)) -> tuple[Path, Path, list[Cut]]:
+         size=(WIDTH, HEIGHT), tile=(960, 540), srt: Path | None = SRT) -> tuple[Path, Path, list[Cut]]:
     if not shutil.which("ffmpeg"):
         raise SystemExit("ffmpeg is not installed")
     cuts = plan(shot_rows if shot_rows is not None else shots(), raw)
     out_dir.mkdir(parents=True, exist_ok=True)
     video, sheet = out_dir / VIDEO_NAME, out_dir / SHEET_NAME
-    subprocess.run(ffmpeg_command(cuts, video, size), check=True)
+    subprocess.run(ffmpeg_command(cuts, video, size, srt=srt), check=True)
     subprocess.run(sheet_command(cuts, video, sheet, tile), check=True)
     return video, sheet, cuts
 

@@ -96,7 +96,9 @@ def test_an_executed_void_says_it_released_the_hold_and_moved_nothing(demo):
     rows, _ = demo.state.ledger_rows()
     (void,) = [r for r in rows if r["action"] == "void_deposit"]
     assert void["amount"] == "0.01" and void["amount_text"] == "0.00 moved (cap 0.01)"
+    assert void["amount_cell"] == "0.00 moved"
+    assert all(r["amount_cell"] == r["amount"] for r in rows if r["action"] != "void_deposit")
     ledger = demo.client.get("/ledger").text
     assert "<td>0.00 moved (cap 0.01)</td>" in ledger              # the no-script table
     grid = (Path(__file__).resolve().parents[2] / "src/ask_first_pay/demo/static/grid.js").read_text()
-    assert "p.data.amount_text || p.data.amount" in grid and "cellRenderer" not in grid
+    assert "p.data.amount_cell || p.data.amount" in grid and "r.amount_text" in grid and "cellRenderer" not in grid

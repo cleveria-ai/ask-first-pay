@@ -1,9 +1,12 @@
 # Voice-over and upload
 
-`docs/video/out/ask_first_pay.mp4` (built by `scripts/make_video.py`, not in git) is complete
-without a voice: lower thirds, the yellow PayPal-call captions, the cards and the English
-subtitles for the Spanish lines are burned in, and its audio track is silent. It can be uploaded
-as it is. To add the founder's voice, record the lines below and run one ffmpeg command.
+`docs/video/out/ask_first_pay.mp4` (built by `scripts/make_video.py`, not in git) stands alone
+without a voice: the narration below is burned in as large captions in a band at the bottom (from
+`docs/video/subtitles.srt`), and so are the lower thirds, the yellow PayPal-call captions, the
+cards and the English subtitles for the Spanish lines. Its audio track is silent. It can be
+uploaded as it is. To add the founder's voice, record the lines below and run one ffmpeg command;
+the voice version keeps the burned-in narration (the mix copies the picture untouched), so a
+viewer with the sound off still follows it.
 
 ## The lines
 
@@ -94,7 +97,7 @@ Upload `ask_first_pay_voice.mp4` if you recorded the voice, otherwise `ask_first
 | Description | the block below |
 | Thumbnail | auto-generated is fine; the frame at 2:30 (closing card) reads best |
 | Audience | **No, it's not made for kids** |
-| Subtitles | Upload `docs/video/subtitles.srt` as English captions (Subtitles → Add language → English → Upload file → "With timing") |
+| Subtitles | None needed: the narration is burned in. Do not upload `subtitles.srt` as captions (they would repeat the burned-in text) |
 | Music | none (no third-party music; nothing to claim) |
 | Visibility | **Public** (the rules require a publicly visible YouTube video; Unlisted or Private does not count) |
 

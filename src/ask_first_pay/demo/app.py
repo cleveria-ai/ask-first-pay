@@ -431,6 +431,7 @@ class DemoState:
                          "action": action,
                          "resource": e.get("recipient") or m.get("recipient", ""),
                          "amount": amount_s, "amount_text": amount_text,
+                         "amount_cell": "0.00 moved" if amount_text != amount_s else amount_s,   # grid cell
                          "hash": e.get("hash", ""),
                          # for the row detail: the full ids, the chain link and the signed fields
                          "mandate_id": str(e.get("mandate_id", "")), "prev": e.get("prev", ""),

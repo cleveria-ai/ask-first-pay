@@ -75,14 +75,14 @@ DISCLOSURE = "Demo runs the scripted model; the live model uses the same tools"
 STAGE = """<!doctype html><meta charset=utf-8><title>Ask First Pay</title>
 <style>
  html,body{margin:0;height:100%;background:#0f1720;font:16px system-ui,sans-serif;color:#e8eef5}
- #wrap{display:flex;gap:16px;padding:12px;height:calc(100% - 24px);box-sizing:border-box;
+ #wrap{display:flex;gap:16px;padding:12px 12px 0;height:calc(100% - 92px);box-sizing:border-box;
        justify-content:center;transition:filter .4s}
  #chat{flex:1;border:0;border-radius:10px;background:#fff}
  #phone{width:410px;border-radius:28px;background:#222;padding:10px;box-sizing:border-box}
  #owner{width:100%;height:100%;border:0;border-radius:20px;background:#fff}
  body.phone-only #chat{display:none}
  body.blur #wrap{filter:blur(7px) brightness(.55)}
- #card{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+ #card{position:fixed;inset:0 0 92px 0;display:none;align-items:center;justify-content:center;
        flex-direction:column;background:rgba(15,23,32,.97);text-align:center;padding:0 80px}
  #card h1{font-size:56px;margin:0 0 18px} #card p{font-size:26px;max-width:900px;line-height:1.4;margin:8px 0}
  #card .cols{display:flex;gap:48px;text-align:left;margin:10px 0 26px}
@@ -94,14 +94,19 @@ STAGE = """<!doctype html><meta charset=utf-8><title>Ask First Pay</title>
      padding:8px 14px;border-left:5px solid #ffd84d;font-size:22px;font-weight:600;max-width:760px;
      min-width:240px}
  #lt small{display:block;font-size:15px;font-weight:400;color:#cfd8e3;margin-top:4px}
- #cap{position:fixed;left:24px;bottom:18px;background:#ffd84d;color:#111;padding:6px 12px;
+ #cap{position:fixed;left:24px;bottom:96px;background:#ffd84d;color:#111;padding:6px 12px;
       border-radius:6px;font-weight:600;display:none;font-family:ui-monospace,monospace}
- #sub{position:fixed;left:50%;transform:translateX(-50%);bottom:64px;background:rgba(0,0,0,.82);
-      color:#fff;padding:8px 16px;border-radius:6px;font-size:21px;display:none;max-width:1000px;text-align:center}
+ #sub{position:fixed;left:427px;transform:translateX(-50%);top:74px;background:rgba(0,0,0,.9);
+      color:#fff;padding:8px 16px;border-radius:6px;font-size:21px;display:none;width:max-content;
+      max-width:760px;text-align:center}
 </style>
 <div id=wrap><iframe id=chat src="/chat#end"></iframe><div id=phone><iframe id=owner src="/owner"></iframe></div></div>
 <div id=card></div><div id=lt></div><div id=sub></div><div id=cap></div>
 <script>document.body.className = location.hash.slice(1).split(",").join(" ")</script>"""
+# The bottom 92 px (138 px in the video) stay empty: scripts/make_video.py burns the narration
+# (docs/video/subtitles.srt) there, so it never covers the chat, the phone or these captions. The
+# English subtitles for the Spanish lines sit at the top of the chat column, over its heading, so
+# the replies they translate stay readable.
 # Playwright records CSS pixels (a device scale factor would not reach the video), so the stage
 # is zoomed instead: the same 1280x720 layout, drawn at 1920x1080; the iframes zoom with it.
 STAGE = STAGE.replace("<style>", f"<style>\n html{{zoom:{SCALE}}}", 1)
@@ -440,6 +445,9 @@ def record(base: str, code: str, simulated: bool, only: set[int] | None) -> None
                     s.scroll(s.chat, "#chain-check")
                     s.beat(4)
                     s.caption("Chain check: intact")
+                    s.beat(3)                     # "even the refused one": show the rest of Today
+                    s.owner.locator("#today").first.evaluate(
+                        "e => e.scrollIntoView({block: 'end', behavior: 'smooth'})")
                 elif n == 10:
                     s.card(closing_card())
         ctx.close()

@@ -68,11 +68,12 @@
         {field: 'reason', headerName: 'Reason', hide: true},          /* shown in the Result chip; exported to CSV */
         {field: 'action', headerName: 'Action', minWidth: narrow ? 130 : 150, filter: 'agTextColumnFilter'},
         {field: 'resource', headerName: 'Resource', minWidth: 120, filter: 'agTextColumnFilter', initialHide: narrow},
-        /* a void row reads "0.00 moved (cap 0.01)": built server-side from the signed action and cap,
-           shown as plain text (no cell renderer, no HTML); it filters and sorts as 0, what moved */
+        /* a void row reads "0.00 moved" (row detail: "0.00 moved (cap 0.01)"), built server-side
+           from the signed action and cap, shown as plain text (no cell renderer, no HTML); it
+           filters and sorts as 0, what moved */
         {colId: 'amount', field: 'amount', headerName: 'Amount', minWidth: narrow ? 84 : 120, type: 'rightAligned', filter: 'agNumberColumnFilter',
-         valueGetter: function (p) { return p.data.amount_text || p.data.amount; },
-         filterValueGetter: function (p) { return parseFloat(p.data.amount_text || p.data.amount); },
+         valueGetter: function (p) { return p.data.amount_cell || p.data.amount; },
+         filterValueGetter: function (p) { return parseFloat(p.data.amount_cell || p.data.amount); },
          comparator: function (a, b) { return parseFloat(a || 0) - parseFloat(b || 0); }},
         {field: 'mandate', headerName: 'Mandate', minWidth: 100, filter: 'agTextColumnFilter', initialHide: true},
         {field: 'hash', headerName: 'Hash', minWidth: 160, cellClass: 'cell-mono', filter: 'agTextColumnFilter', initialHide: narrow}   /* link: row detail */

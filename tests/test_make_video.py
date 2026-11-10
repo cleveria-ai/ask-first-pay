@@ -67,6 +67,20 @@ def test_make_video_command_is_h264_aac_1080p_and_never_changes_speed(tmp_path):
     assert "trim=duration=10" in joined and "trim=duration=6" in joined
     for speed in ("atempo", "setpts=0.", "setpts=2", "*PTS", "PTS/"):
         assert speed not in joined
+    # the narration is burned in, large, bottom centre, in a box, from the shot list's subtitles
+    assert f"subtitles=filename='{mv.SRT}'" in joined
+    for style in ("PlayResY=1080", "Fontsize=44", "BorderStyle=3", "Alignment=2", "WrapStyle=2"):
+        assert style in joined
+    assert "subtitles=" not in " ".join(mv.ffmpeg_command(cuts, tmp_path / "x.mp4", srt=None))
+    with pytest.raises(SystemExit, match="plain path"):
+        mv.narration_filter(Path("/tmp/a:b.srt"))
+
+
+def gray_max(video, t, crop):
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(t), "-i", str(video), "-frames:v", "1",
+                          "-vf", f"crop={crop},format=gray", "-f", "rawvideo", "-"],
+                         capture_output=True, check=True).stdout
+    return max(raw)
 
 
 @needs_ffmpeg
@@ -79,7 +93,9 @@ def test_make_video_builds_a_real_file_and_contact_sheet(tmp_path):
                         f"color=c={slug}:s=320x180:r=25:d={length}", "-c:v", "libvpx", "-b:v", "200k",
                         str(raw / f"{n:02d}-{slug}.webm")], check=True)
         (raw / f"{n:02d}-{slug}.json").write_text(json.dumps({"head_s": 0.5 if n == 1 else 0}))
-    video, sheet, cuts = mv.make(raw, out, rows, size=(320, 180), tile=(160, 90))
+    srt = tmp_path / "n.srt"
+    srt.write_text("1\n00:00:00,100 --> 00:00:01,500\nNine twelve.\n", encoding="utf-8")
+    video, sheet, cuts = mv.make(raw, out, rows, size=(320, 180), tile=(160, 90), srt=srt)
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,width,height",
                             "-show_entries", "format=duration", "-of", "json", str(video)],
                            capture_output=True, text=True, check=True)
@@ -90,6 +106,9 @@ def test_make_video_builds_a_real_file_and_contact_sheet(tmp_path):
     assert (v["width"], v["height"]) == (320, 180)
     assert float(info["format"]["duration"]) == pytest.approx(3.0, abs=0.15)
     assert cuts[1].hold == pytest.approx(0.5, abs=0.05)
+    # white narration text at the bottom while the cue runs, none after it (the clips are flat colour)
+    assert gray_max(video, 0.8, "200:40:60:140") > 200
+    assert gray_max(video, 2.5, "200:40:60:140") < 120
     assert sheet.exists() and sheet.stat().st_size > 0
     sp = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0",
                          str(sheet)], capture_output=True, text=True, check=True)
