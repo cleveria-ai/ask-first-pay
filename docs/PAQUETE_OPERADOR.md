@@ -44,13 +44,53 @@ y te da sus enlaces.
 **Si no lo haces**, la entrega sigue siendo válida. El texto de Devpost dice que el camino del
 sandbox está «listo para correr» y no afirma una corrida real.
 
-## Acto 6 — El vídeo en YouTube (15 minutos)
+## Acto 6 — El vídeo en YouTube (15 minutos; 45 si grabas tu voz)
 
-**Estado:** VÍDEO_PENDIENTE
+El vídeo ya está hecho a partir de la app: 2:39, 1920x1080, con la narración en subtítulos
+quemados y sin música. Se entiende sin voz.
+
+- **Archivo:** `~/Desarrollos/hackathon-paypal-ask-first-pay/docs/video/out/ask_first_pay.mp4`
+  (8,8 MB; git no lo guarda). Las diez tomas en una imagen:
+  `~/Desarrollos/hackathon-paypal-ask-first-pay/docs/video/out/contact_sheet.png`.
+- **Mira el vídeo una vez entero.** Dice que la demo corre con el modelo guionizado y un PayPal
+  simulado, y que la clínica y los clientes son ficticios. Si algo no te gusta, dímelo y lo
+  regenero en minutos.
+- **Opcional, tu voz:** lees las diez frases de `docs/video/VOICE_OVER.md` y un comando las une
+  al vídeo como `ask_first_pay_voice.mp4`. La narración sigue en pantalla.
+
+Para subirlo:
+
+1. Abre https://studio.youtube.com con la cuenta que quieras mostrar y elige «Crear → Subir
+   vídeos». Sube `ask_first_pay_voice.mp4` si grabaste la voz; si no, `ask_first_pay.mp4`.
+2. **Título:** `Ask First Pay: an AI front desk that can hold a PayPal deposit, never move it`
+3. **Descripción:** copia el bloque «Description» de `docs/video/VOICE_OVER.md`.
+4. **Audiencia:** «No, no es contenido creado para niños».
+5. **Subtítulos:** no subas ninguno; la narración ya va en la imagen.
+6. **Visibilidad:** **Pública**. Las reglas exigen un vídeo público; «No listado» no cuenta.
+7. Copia el enlace del vídeo: va en el formulario de Devpost (acto 8).
 
 ## Acto 7 — Hacer público el repositorio (2 minutos)
 
-**Estado:** LIMPIEZA_PENDIENTE
+La coordinadora ya hizo la limpieza previa en `main`:
+
+- quitó el aviso «private until submission» del README;
+- sacó de `main` las notas internas (encargos, revisiones de jueces, variantes de historia,
+  notas en español y este paquete), que quedan en la rama local `internal` del Dell;
+- corrió la búsqueda de secretos en todo el historial.
+
+**Lo que debes saber antes:** el historial de git y las ramas de trabajo (`n1-…` a `n12-…`)
+siguen mostrando esas notas internas a quien las busque. No hay secretos en ellas: el secreto del
+sandbox no aparece en ningún commit, medido el 7-nov con 0 coincidencias. Recomiendo publicar así.
+Si prefieres un repositorio limpio, con un solo commit y sin historial, dímelo antes y lo preparo;
+tendrías que crear tú el repositorio nuevo.
+
+Para publicarlo, pega esto en la terminal de Claude Code:
+
+```
+! gh repo edit cleveria-ai/ask-first-pay --visibility public --accept-visibility-change-consequences && gh repo edit cleveria-ai/ask-first-pay --description "An AI front desk that can hold a PayPal deposit on its own; only the owner's tap moves it. PayPal AI Hackathon 2026." && gh repo view cleveria-ai/ask-first-pay --json visibility,licenseInfo
+```
+
+Debe terminar mostrando `"visibility":"PUBLIC"` y `"key":"apache-2.0"`.
 
 ## Acto 8 — El formulario de Devpost (20 minutos)
 
