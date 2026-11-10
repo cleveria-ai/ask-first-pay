@@ -6,11 +6,13 @@ subtitles and `scripts/record_demo.py` in step: same shots, same seconds, total 
 (2:45: the work order's cap; the rules allow 3:00).
 
 Raw clips: `scripts/record_demo.py` records each shot below as `docs/video/raw/NN-slug.webm`
-(headless Chromium, 1280x720, offline demo with `ASK_FIRST_VIDEO=1` and
-`ASK_FIRST_TZ=America/Mexico_City`, no voice) plus a still of its last frame. Shots are recorded in
+(headless Chromium, the 1280x720 stage drawn at 1920x1080, offline demo with `ASK_FIRST_VIDEO=1`
+and `ASK_FIRST_TZ=America/Mexico_City`, no voice) plus a still of its last frame and a `.json` with
+where the shot starts in the clip. Shots are recorded in
 story order 4, 1, 2, 3, 5-10: the cold open is the no-show card of the booking made in shot 4.
-Each raw clip runs 2-6 s longer than planned (page load at the head, still at the tail): trim to
-the seconds here. The approval id (8 hex characters) differs in each recording; the voice never
+Each raw clip runs 1-5 s longer than planned (page load at the head, still at the tail):
+`scripts/make_video.py` cuts each one to the seconds here and writes the upload,
+`docs/video/out/ask_first_pay.mp4` (voice-over and YouTube settings: `docs/video/VOICE_OVER.md`). The approval id (8 hex characters) differs in each recording; the voice never
 says it.
 
 The "Say" column is the voice-over (the founder's voice; no face on camera) and is exactly what
