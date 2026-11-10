@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 def test_no_show_captures_exactly_once_and_only_after_approval(demo):
     demo.client.post("/scenario/no_show")
     (jti,) = demo.pending_ids()
@@ -79,3 +82,23 @@ def test_rejected_replayed_mandate_shows_on_the_ledger_page(demo):
 
 def test_rejected_decline_of_unknown_mandate_is_refused(demo):
     assert demo.decline("nope").status_code == 400
+
+
+def test_an_executed_void_says_it_released_the_hold_and_moved_nothing(demo):
+    """The void mandate's 0.01 is a symbolic cap: the chat/owner note and the ledger say $0.00 moved."""
+    demo.client.post("/scenario/cancel")
+    (jti,) = demo.pending_ids()
+    assert demo.approve(jti).status_code == 200
+    for page in ("/chat", "/owner"):
+        html = demo.client.get(page).text
+        assert "the hold was released and 0.00 USD moved" in html
+        assert "void_deposit on" in html and "for 0.01 USD" not in html
+    rows, _ = demo.state.ledger_rows()
+    (void,) = [r for r in rows if r["action"] == "void_deposit"]
+    assert void["amount"] == "0.01" and void["amount_text"] == "0.00 moved (cap 0.01)"
+    assert void["amount_cell"] == "0.00 moved"
+    assert all(r["amount_cell"] == r["amount"] for r in rows if r["action"] != "void_deposit")
+    ledger = demo.client.get("/ledger").text
+    assert "<td>0.00 moved (cap 0.01)</td>" in ledger              # the no-script table
+    grid = (Path(__file__).resolve().parents[2] / "src/ask_first_pay/demo/static/grid.js").read_text()
+    assert "p.data.amount_cell || p.data.amount" in grid and "r.amount_text" in grid and "cellRenderer" not in grid

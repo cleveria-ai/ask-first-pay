@@ -52,7 +52,12 @@ def describe(demo, label: str, before: dict) -> dict:
         m = demo.owner.get(str(e.get("mandate_id", ""))) or {}
         action = e.get("action") or m.get("action", "?")
         target = e.get("recipient") or m.get("recipient", "?")
-        if e.get("result") == "executed":
+        if e.get("result") == "executed" and action == "void_deposit":
+            # a void's 0.01 is only the symbolic cap of the signed mandate: say what moved
+            items.append(f"Gate executed void_deposit on {target}, once (ledger #{e.get('n')}): the hold was "
+                         f"released and 0.00 {CURRENCY} moved.")
+            tones.add("ok")
+        elif e.get("result") == "executed":
             items.append(f"Gate executed {action} on {target} for {_money(e.get('amount', m.get('cap', 0)))}, "
                          f"once (ledger #{e.get('n')}).")
             tones.add("ok")

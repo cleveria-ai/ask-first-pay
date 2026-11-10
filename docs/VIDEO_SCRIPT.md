@@ -64,8 +64,9 @@ not verified against the sandbox), the phone vibration (G6: a headless recording
 
 ## Notes for the recording
 
-- Record with `scripts/record_demo.py` (fresh in-process demo, 1280x720, offline) and trim each
-  raw clip to its seconds; or follow the SHOTLIST checklist by hand.
+- Record with `scripts/record_demo.py` (fresh in-process demo, 1920x1080, offline) and cut with
+  `scripts/make_video.py` (each raw clip to its seconds); or follow the SHOTLIST checklist by hand.
+  The founder's voice goes on top with one ffmpeg command (`docs/video/VOICE_OVER.md`).
 - If something lags, cut silence in editing; never speed up the voice; stay under 2:45.
 - Narrate times, not dates: the slots read "Mon 16 Nov" and the Today panel reads the recording
   day.

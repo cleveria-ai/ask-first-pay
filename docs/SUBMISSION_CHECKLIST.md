@@ -13,7 +13,7 @@ hackathon-specific questions and answer them from `docs/DEVPOST.md`.
 | Full suite green on `main` | `.venv/bin/python -m pytest -q` | OWNER (re-run after merge) |
 | Optional: one run against the PayPal sandbox with your own sandbox app | `pytest -m live` and the demo with `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET` exported (never committed) | OWNER |
 | Optional: one run with Claude | export `ANTHROPIC_API_KEY`, `scripts/demo.sh` | OWNER |
-| Record the voice-over and edit the video from `docs/VIDEO_SCRIPT.md` and the raw clips in `docs/video/raw/` (script totals 2:39; hard cap 2:45, rules cap under 3:00) | — | OWNER |
+| The video is built: `.venv/bin/python scripts/make_video.py` writes `docs/video/out/ask_first_pay.mp4` (2:39, 1920x1080, narration burned in, silent audio; hard cap 2:45, rules cap under 3:00). Optional: record the voice-over and mix it with the one command in `docs/video/VOICE_OVER.md` (`ask_first_pay_voice.mp4`) | `docs/video/out/` | OWNER |
 | Upload the video to **YouTube** and set its visibility to **Public** (rules line 175: "uploaded to and made publicly visible on YouTube"). Check the link in a private browser window before submitting. | YouTube URL | OWNER |
 | Run every step of *Before making the repository public* below, then make it public | https://github.com/cleveria-ai/ask-first-pay | OWNER |
 | The Apache-2.0 license shows in the repository's About section (rules line 171) | `gh repo view cleveria-ai/ask-first-pay --json visibility,licenseInfo` shows `PUBLIC` and `Apache-2.0` | OWNER |

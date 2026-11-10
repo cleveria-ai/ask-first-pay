@@ -1,6 +1,8 @@
-"""Drive the demo shot by shot (docs/video/SHOTLIST.md) in headless Chromium at 1280x720 and save
-one .webm per shot in docs/video/raw/. No voice, no editing: the operator records the narration
-over these clips and cuts them together.
+"""Drive the demo shot by shot (docs/video/SHOTLIST.md) in headless Chromium and save one .webm per
+shot in docs/video/raw/: the stage is laid out at 1280x720 and drawn at 1920x1080 (CSS zoom 1.5 on
+the stage, iframes included), so each clip is a sharp 1920x1080, plus a .json with where the shot starts in the clip and how long it ran. No voice:
+scripts/make_video.py cuts the clips into docs/video/out/ask_first_pay.mp4 and the founder can add
+the narration over it (docs/video/VOICE_OVER.md).
 
     .venv/bin/pip install -e ".[browser]"   # Playwright; then: .venv/bin/python -m playwright install chromium
     .venv/bin/python scripts/record_demo.py              # starts the demo in-process, offline
@@ -31,6 +33,7 @@ approval page, which the operator records by hand (see SHOTLIST.md, checklist).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import socket
@@ -41,7 +44,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "docs" / "video" / "raw"
-SIZE = {"width": 1280, "height": 720}
+SIZE = {"width": 1280, "height": 720}           # the stage's layout (CSS pixels)
+SCALE = 1.5                                     # the stage is zoomed by this: text drawn at 1080p
+VIDEO = {"width": 1920, "height": 1080}         # = SIZE * SCALE: the viewport and every raw clip
 CHROMIUM = os.environ.get("ASK_FIRST_CHROMIUM", "/opt/pw-browsers/chromium")
 REPO_URL = "github.com/cleveria-ai/ask-first-pay"
 
@@ -70,14 +75,14 @@ DISCLOSURE = "Demo runs the scripted model; the live model uses the same tools"
 STAGE = """<!doctype html><meta charset=utf-8><title>Ask First Pay</title>
 <style>
  html,body{margin:0;height:100%;background:#0f1720;font:16px system-ui,sans-serif;color:#e8eef5}
- #wrap{display:flex;gap:16px;padding:12px;height:calc(100% - 24px);box-sizing:border-box;
+ #wrap{display:flex;gap:16px;padding:12px 12px 0;height:calc(100% - 92px);box-sizing:border-box;
        justify-content:center;transition:filter .4s}
  #chat{flex:1;border:0;border-radius:10px;background:#fff}
  #phone{width:410px;border-radius:28px;background:#222;padding:10px;box-sizing:border-box}
  #owner{width:100%;height:100%;border:0;border-radius:20px;background:#fff}
  body.phone-only #chat{display:none}
  body.blur #wrap{filter:blur(7px) brightness(.55)}
- #card{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+ #card{position:fixed;inset:0 0 92px 0;display:none;align-items:center;justify-content:center;
        flex-direction:column;background:rgba(15,23,32,.97);text-align:center;padding:0 80px}
  #card h1{font-size:56px;margin:0 0 18px} #card p{font-size:26px;max-width:900px;line-height:1.4;margin:8px 0}
  #card .cols{display:flex;gap:48px;text-align:left;margin:10px 0 26px}
@@ -85,17 +90,26 @@ STAGE = """<!doctype html><meta charset=utf-8><title>Ask First Pay</title>
  #card li{font-size:28px;line-height:1.5;list-style:none} #card ul{padding:0;margin:0}
  #card code{font-size:18px;color:#ffd84d;margin-left:10px}
  #card .small{font-size:18px;color:#9fb3c8}
- #lt{position:fixed;left:24px;top:18px;display:none;background:rgba(15,23,32,.86);color:#fff;
-     padding:8px 14px;border-left:5px solid #ffd84d;font-size:22px;font-weight:600;max-width:760px}
+ #lt{position:fixed;left:24px;top:18px;display:none;background:#0f1720;color:#fff;
+     padding:8px 14px;border-left:5px solid #ffd84d;font-size:22px;font-weight:600;max-width:760px;
+     min-width:240px}
  #lt small{display:block;font-size:15px;font-weight:400;color:#cfd8e3;margin-top:4px}
- #cap{position:fixed;left:24px;bottom:18px;background:#ffd84d;color:#111;padding:6px 12px;
+ #cap{position:fixed;left:24px;bottom:96px;background:#ffd84d;color:#111;padding:6px 12px;
       border-radius:6px;font-weight:600;display:none;font-family:ui-monospace,monospace}
- #sub{position:fixed;left:50%;transform:translateX(-50%);bottom:64px;background:rgba(0,0,0,.82);
-      color:#fff;padding:8px 16px;border-radius:6px;font-size:21px;display:none;max-width:1000px;text-align:center}
+ #sub{position:fixed;left:427px;transform:translateX(-50%);top:74px;background:rgba(0,0,0,.9);
+      color:#fff;padding:8px 16px;border-radius:6px;font-size:21px;display:none;width:max-content;
+      max-width:760px;text-align:center}
 </style>
 <div id=wrap><iframe id=chat src="/chat#end"></iframe><div id=phone><iframe id=owner src="/owner"></iframe></div></div>
 <div id=card></div><div id=lt></div><div id=sub></div><div id=cap></div>
 <script>document.body.className = location.hash.slice(1).split(",").join(" ")</script>"""
+# The bottom 92 px (138 px in the video) stay empty: scripts/make_video.py burns the narration
+# (docs/video/subtitles.srt) there, so it never covers the chat, the phone or these captions. The
+# English subtitles for the Spanish lines sit at the top of the chat column, over its heading, so
+# the replies they translate stay readable.
+# Playwright records CSS pixels (a device scale factor would not reach the video), so the stage
+# is zoomed instead: the same 1280x720 layout, drawn at 1920x1080; the iframes zoom with it.
+STAGE = STAGE.replace("<style>", f"<style>\n html{{zoom:{SCALE}}}", 1)
 
 
 def plan() -> str:
@@ -106,6 +120,8 @@ def plan() -> str:
 
 
 def free_port() -> int:
+    if os.environ.get("ASK_FIRST_RECORD_PORT"):  # a fixed port, e.g. to stay clear of 8765
+        return int(os.environ["ASK_FIRST_RECORD_PORT"])
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
@@ -140,6 +156,7 @@ class Shot:
         self.start_mode = mode                    # stage classes from the first frame, e.g. "phone-only"
 
     def __enter__(self):
+        self.t_open = time.monotonic()            # the clip starts here (page load at its head)
         self.page = self.ctx.new_page()
         self.page.goto(self.base + "/__stage" + (f"#{self.start_mode}" if self.start_mode else ""))
         self.chat = self.page.frame_locator("#chat")
@@ -154,6 +171,7 @@ class Shot:
             if left > 0:
                 self.page.wait_for_timeout(int(left * 1000))
         video = self.page.video
+        content = time.monotonic() - self.t0
         if exc[0] is None:                        # last frame as a still, to check the clip at a glance
             self.page.screenshot(path=str(RAW / f"{self.n:02d}-{self.slug}.png"))
         self.page.close()
@@ -161,6 +179,10 @@ class Shot:
             dest = RAW / f"{self.n:02d}-{self.slug}.webm"
             video.save_as(str(dest))
             video.delete()
+            # where the shot really starts and how long it ran: scripts/make_video.py cuts here
+            dest.with_suffix(".json").write_text(json.dumps(
+                {"head_s": round(self.t0 - self.t_open, 3), "content_s": round(content, 3),
+                 "planned_s": self.seconds}) + "\n", encoding="utf-8")
             print(f"  saved {dest.relative_to(ROOT)}")
         return False
 
@@ -201,12 +223,19 @@ class Shot:
         which.locator(selector).first.scroll_into_view_if_needed()
         self.page.wait_for_timeout(300)
 
+    @staticmethod
+    def tap(locator, timeout: int = 15_000):
+        """Click inside the zoomed stage: Playwright's pointer maths does not follow the CSS zoom
+        into the iframes, so wait until the element shows and activate it in the page instead."""
+        locator.wait_for(state="visible", timeout=timeout)
+        locator.evaluate("e => e.click()")
+
     def say(self, text: str):
         box = self.chat.locator("#message")
-        box.click()
+        box.focus()
         box.press_sequentially(text, delay=35)
         self.beat(0.4)
-        self.chat.get_by_role("button", name="Send").click()
+        self.tap(self.chat.get_by_role("button", name="Send"))
         self.after_post()
 
     def after_post(self):
@@ -223,7 +252,7 @@ class Shot:
     def owner_approve(self, read_s: float = 3.5):
         card = self.owner_card()
         self.beat(read_s)                             # time to read the signed fields
-        card.locator(".approve").click()
+        self.tap(card.locator(".approve"))
         card.locator(".result").filter(has_text="Approved").wait_for(timeout=10_000)
         self.page.wait_for_timeout(900)
 
@@ -311,7 +340,7 @@ def record(base: str, code: str, simulated: bool, only: set[int] | None) -> None
     done: set[str] = set()                        # story steps already on the server
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=CHROMIUM if Path(CHROMIUM).exists() else None)
-        ctx = browser.new_context(viewport=SIZE, record_video_dir=str(tmp), record_video_size=SIZE)
+        ctx = browser.new_context(viewport=VIDEO, record_video_dir=str(tmp), record_video_size=VIDEO)
         ctx.route(base + "/**", lambda route: stage_route(route, base))
         pair(ctx, base, code)
         want = lambda n: only is None or n in only                                    # noqa: E731
@@ -350,10 +379,10 @@ def record(base: str, code: str, simulated: bool, only: set[int] | None) -> None
                     s.say(LUCIA_BOOKS)
                     s.caption("Orders v2 · intent AUTHORIZE")
                     s.beat(2.5)
-                    s.chat.get_by_role("link", name="Hold the deposit").last.click()
+                    s.tap(s.chat.get_by_role("link", name="Hold the deposit").last)
                     s.beat(2.5)
                     if simulated:
-                        s.chat.get_by_role("button", name="Approve the hold").click()
+                        s.tap(s.chat.get_by_role("button", name="Approve the hold"))
                     s.page.wait_for_timeout(1200)
                     s.frame_to("chat", "/chat#end")
                     s.caption("Webhook signature verified")
@@ -386,7 +415,7 @@ def record(base: str, code: str, simulated: bool, only: set[int] | None) -> None
                     s.beat(3.5)
                     s.frame_to("chat", "/ledger")
                     s.beat(1.5)
-                    s.chat.get_by_role("button", name="Agent tries to replay the last mandate").click()
+                    s.tap(s.chat.get_by_role("button", name="Agent tries to replay the last mandate"))
                     s.page.wait_for_timeout(900)
                     s.chat.locator("[data-grid=ledger]", has_text="replay").first.wait_for(timeout=10_000)
                     s.caption("Replay · rejected · nothing moved")
@@ -416,6 +445,9 @@ def record(base: str, code: str, simulated: bool, only: set[int] | None) -> None
                     s.scroll(s.chat, "#chain-check")
                     s.beat(4)
                     s.caption("Chain check: intact")
+                    s.beat(3)                     # "even the refused one": show the rest of Today
+                    s.owner.locator("#today").first.evaluate(
+                        "e => e.scrollIntoView({block: 'end', behavior: 'smooth'})")
                 elif n == 10:
                     s.card(closing_card())
         ctx.close()

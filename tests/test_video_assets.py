@@ -46,6 +46,8 @@ def test_record_demo_dry_run_needs_no_browser(capsys):
     out = capsys.readouterr().out
     assert out.count(".webm") == 10 and "total 159 s (2:39)" in out
     assert rec.SIZE == {"width": 1280, "height": 720}
+    assert rec.VIDEO == {k: int(v * rec.SCALE) for k, v in rec.SIZE.items()} == {"width": 1920, "height": 1080}
+    assert f"html{{zoom:{rec.SCALE}}}" in rec.STAGE
 
 
 def test_record_demo_records_every_shot_once_and_says_what_runs():

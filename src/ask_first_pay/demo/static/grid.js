@@ -68,8 +68,12 @@
         {field: 'reason', headerName: 'Reason', hide: true},          /* shown in the Result chip; exported to CSV */
         {field: 'action', headerName: 'Action', minWidth: narrow ? 130 : 150, filter: 'agTextColumnFilter'},
         {field: 'resource', headerName: 'Resource', minWidth: 120, filter: 'agTextColumnFilter', initialHide: narrow},
-        {field: 'amount', headerName: 'Amount', minWidth: narrow ? 84 : 96, type: 'rightAligned', filter: 'agNumberColumnFilter',
-         filterValueGetter: function (p) { return parseFloat(p.data.amount); },
+        /* a void row reads "0.00 moved" (row detail: "0.00 moved (cap 0.01)"), built server-side
+           from the signed action and cap, shown as plain text (no cell renderer, no HTML); it
+           filters and sorts as 0, what moved */
+        {colId: 'amount', field: 'amount', headerName: 'Amount', minWidth: narrow ? 84 : 120, type: 'rightAligned', filter: 'agNumberColumnFilter',
+         valueGetter: function (p) { return p.data.amount_cell || p.data.amount; },
+         filterValueGetter: function (p) { return parseFloat(p.data.amount_cell || p.data.amount); },
          comparator: function (a, b) { return parseFloat(a || 0) - parseFloat(b || 0); }},
         {field: 'mandate', headerName: 'Mandate', minWidth: 100, filter: 'agTextColumnFilter', initialHide: true},
         {field: 'hash', headerName: 'Hash', minWidth: 160, cellClass: 'cell-mono', filter: 'agTextColumnFilter', initialHide: narrow}   /* link: row detail */
@@ -83,7 +87,7 @@
           ['sent to PayPal as', r.request_id ? 'PayPal-Request-Id: ' + r.request_id : 'not sent: the gate refused it before PayPal'],
           ['PayPal returned', r.paypal_id || '—'],
           ['action', r.action], ['recipient', r.resource],
-          ['amount', r.amount ? 'USD ' + r.amount : '—'],
+          ['amount', r.amount_text ? 'USD ' + r.amount_text : '—'],
           ['signed cap', s.cap !== undefined ? 'USD ' + Number(s.cap).toFixed(2) : '—'],
           ['signed by', (s.iss || '?') + ' for ' + (s.sub || '?')],
           ['signed expiry', s.exp ? new Date(s.exp * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : '—'],
