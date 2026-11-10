@@ -40,29 +40,29 @@ own, because a hold moves nothing.
 To move it, it can only ask.
 
 10
-00:00:34,300 --> 00:00:36,561
+00:00:34,300 --> 00:00:36,602
 Eleven forty-eight at night.
 
 11
-00:00:36,611 --> 00:00:38,790
+00:00:36,652 --> 00:00:38,869
 Lucía books Monday at nine.
 
 12
-00:00:38,840 --> 00:00:43,579
-The agent creates a PayPal
-order to authorize ten dollars.
+00:00:38,919 --> 00:00:43,992
+The agent creates a PayPal order
+that only holds ten dollars.
 
 13
-00:00:43,629 --> 00:00:49,605
-She approves the hold, a signed webhook
+00:00:44,042 --> 00:00:49,535
+She approves it, a signed notice
 tells the agent, and it confirms.
 
 14
-00:00:49,655 --> 00:00:51,091
+00:00:49,585 --> 00:00:51,047
 Held, not charged.
 
 15
-00:00:51,141 --> 00:00:53,650
+00:00:51,097 --> 00:00:53,650
 The owner's phone stayed quiet.
 
 16
