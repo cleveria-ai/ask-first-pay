@@ -35,8 +35,10 @@ the prompter: each shot's visuals tell you where you are) and read from this pag
 recorder and the video at the same moment, and read each line when its shot appears. Save as
 `voice.m4a` (iPhone Voice Memos and Android
 recorders save m4a; on a laptop, QuickTime "New Audio Recording" or Audacity export to m4a/wav).
-If your take starts late or early, set `OFFSET` in the command below (seconds; positive delays
-the voice, negative trims its head).
+If the recorder started before the video, set `TRIM` in the command below to the seconds to cut
+from the head of the recording; if it started after the video, set `DELAY_MS` to the
+milliseconds of silence to put before it. (Tip: say "mark" as you press play; the time of "mark"
+in the recording is your `TRIM`.)
 
 **Option B: per shot.** Record ten short files `voice/01.m4a` … `voice/10.m4a`, one line each,
 starting to speak right away (no more than a breath of silence at the head). Each is placed at
@@ -54,9 +56,10 @@ speech on YouTube) and padded with silence to the video's length.
 **Option A, one take:**
 
 ```bash
-OFFSET=0   # seconds; e.g. 0.8 if you started speaking 0.8 s late, -0.5 if 0.5 s early
-ffmpeg -y -i docs/video/out/ask_first_pay.mp4 -itsoffset "$OFFSET" -i docs/video/out/voice.m4a \
-  -filter_complex "[1:a]aresample=48000,aformat=channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11,apad[a]" \
+TRIM=0       # seconds cut from the head of voice.m4a (recorder started before the video)
+DELAY_MS=0   # milliseconds of silence before it (recorder started after the video)
+ffmpeg -y -i docs/video/out/ask_first_pay.mp4 -i docs/video/out/voice.m4a \
+  -filter_complex "[1:a]atrim=start=$TRIM,asetpts=PTS-STARTPTS,adelay=$DELAY_MS:all=1,aresample=48000,aformat=channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11,apad[a]" \
   -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -ar 48000 -shortest -movflags +faststart \
   docs/video/out/ask_first_pay_voice.mp4
 ```

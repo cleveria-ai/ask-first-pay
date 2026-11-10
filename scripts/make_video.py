@@ -114,7 +114,8 @@ def label(c: Cut) -> str:
 
 
 def sheet_command(cuts: list[Cut], video: Path, out: Path, tile=(960, 540), cols=2) -> list[str]:
-    """One frame per shot (a second before its end: the shot's result), in a labelled grid."""
+    """One frame per shot (a second before its end: the shot's result), in a grid, each labelled
+    bottom right so the lower third (top left) and the caption (bottom left) stay visible."""
     tw, th = tile
     cmd = ["ffmpeg", "-v", "error", "-y"]
     for c in cuts:
@@ -122,7 +123,7 @@ def sheet_command(cuts: list[Cut], video: Path, out: Path, tile=(960, 540), cols
     parts, cells = [], []
     for i, c in enumerate(cuts):
         text = label(c).replace(":", r"\:")
-        draw = (f",drawtext=fontfile={FONT}:text='{text}':x=12:y=12:fontsize={max(14, th // 18)}:"
+        draw = (f",drawtext=fontfile={FONT}:text='{text}':x=w-tw-12:y=h-th-12:fontsize={max(14, th // 18)}:"
                 f"fontcolor=white:box=1:boxcolor=0x000000@0.75:boxborderw=8") if FONT.exists() else ""
         parts.append(f"[{i}:v]trim=end_frame=1,scale={tw}:{th}:flags=lanczos{draw}[t{i}]")
         cells.append(f"{(i % cols) * tw}_{(i // cols) * th}")

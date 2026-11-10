@@ -30,7 +30,7 @@ def fake_raw(tmp_path, rows, lengths, heads):
 
 def test_make_video_plan_cuts_each_shot_from_its_recorded_start(tmp_path):
     rows = [(1, "a", 10), (2, "b", 14), (3, "c", 9)]
-    dur = fake_raw(tmp_path, rows, lengths=[13.0, 15.5, 7.0], heads=[2.8, 1.5, 1.1])
+    dur = fake_raw(tmp_path, rows, lengths=[13.0, 15.5, 7.0], heads=[2.5, 1.2, 0.8])
     cuts = mv.plan(rows, tmp_path, duration=dur)
     assert [(c.start, c.at, c.seconds) for c in cuts] == [(2.5, 0, 10), (1.2, 10, 14), (0.8, 24, 9)]
     assert [c.hold for c in cuts] == [0, 0, 2.8]          # clip 3 ends early: its last frame is held
@@ -58,7 +58,7 @@ def test_make_video_real_shots_fit_the_script():
 
 def test_make_video_command_is_h264_aac_1080p_and_never_changes_speed(tmp_path):
     rows = [(1, "a", 10), (2, "b", 6)]
-    cuts = mv.plan(rows, tmp_path, duration=fake_raw(tmp_path, rows, [12.0, 9.0], [1.8, 2.3]))
+    cuts = mv.plan(rows, tmp_path, duration=fake_raw(tmp_path, rows, [12.0, 9.0], [1.5, 2.0]))
     cmd = mv.ffmpeg_command(cuts, tmp_path / "x.mp4")
     joined = " ".join(cmd)
     assert cmd[cmd.index("-c:v") + 1] == "libx264" and cmd[cmd.index("-c:a") + 1] == "aac"
@@ -78,7 +78,7 @@ def test_make_video_builds_a_real_file_and_contact_sheet(tmp_path):
         subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
                         f"color=c={slug}:s=320x180:r=25:d={length}", "-c:v", "libvpx", "-b:v", "200k",
                         str(raw / f"{n:02d}-{slug}.webm")], check=True)
-        (raw / f"{n:02d}-{slug}.json").write_text(json.dumps({"head_s": 0.8 if n == 1 else 0}))
+        (raw / f"{n:02d}-{slug}.json").write_text(json.dumps({"head_s": 0.5 if n == 1 else 0}))
     video, sheet, cuts = mv.make(raw, out, rows, size=(320, 180), tile=(160, 90))
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,width,height",
                             "-show_entries", "format=duration", "-of", "json", str(video)],
