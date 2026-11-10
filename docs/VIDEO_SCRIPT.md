@@ -2,7 +2,7 @@
 
 **Total running time: 2:39** (159 s; the work order caps it at 2:45, the rules at 3:00).
 
-Story V1 from `docs/STORY_VARIANTS_2026-11.md`: qnowa's founder tells why the agent may hold a
+The founder story ("Can it touch my money?"): qnowa's founder tells why the agent may hold a
 deposit but never move it. Voice-over in the founder's voice, no face on camera. Every claim in
 the founder's voice is listed in `docs/FOUNDER_FACTS.md` with its status; this cut uses the
 default wording only (no numbers about qnowa, "designed for qnowa's clinics").
