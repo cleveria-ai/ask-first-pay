@@ -27,3 +27,5 @@ because a hold moves nothing"; "Her money, her decision".
 When the founder confirms or rewrites a claim: replace the wording in this table and in every
 place listed under "Where", set the status to `confirmed by the owner` with the date, and re-run
 `.venv/bin/python scripts/check_video_assets.py --write-srt` if the video voice changed.
+
+2026-11-10: the owner asked the coordinator to apply the default wording for F1-F6 (relayed by the method's integration session); no line was individually rewritten. This file is internal and leaves `main` before publication (`docs/SUBMISSION_CHECKLIST.md`, *Before making the repository public*).

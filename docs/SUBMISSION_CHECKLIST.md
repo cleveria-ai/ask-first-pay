@@ -60,7 +60,7 @@ git commit -am "README: the repository is public"
 
 **2. Keep the internal files on a branch `internal`, and delete them from `main` in one commit.**
 Internal files: `_sesion/` (Spanish-language session notes), `docs/encargos/` (work orders),
-`docs/PR_*.md`, `docs/JUDGE_*.md`, `docs/STORY_VARIANTS_*.md`. `scripts/escalera.py` reads the work
+`docs/PR_*.md`, `docs/JUDGE_*.md`, `docs/STORY_VARIANTS_*.md`, `docs/FOUNDER_FACTS.md` (internal record of which founder lines are default wording). `scripts/escalera.py` reads the work
 orders, so it keeps working on `internal`, where `docs/encargos/` still exists.
 
 ```bash
@@ -69,9 +69,9 @@ git branch internal main                              # internal = main with eve
 #   git worktree add ../afp-internal internal && cd ../afp-internal && python3 -m venv .venv \
 #     && .venv/bin/pip install -q -e ".[dev]" && python3 scripts/escalera.py docs/encargos/N11_pitch_and_compliance.md; cd -
 git rm -r -q _sesion docs/encargos
-git rm -q docs/PR_*.md docs/JUDGE_*.md docs/STORY_VARIANTS_*.md
+git rm -q docs/PR_*.md docs/JUDGE_*.md docs/STORY_VARIANTS_*.md docs/FOUNDER_FACTS.md
 git commit -m "Move internal working files to the internal branch before publication"
-git ls-files _sesion docs/encargos 'docs/PR_*' 'docs/JUDGE_*' 'docs/STORY_*' | wc -l   # must print 0
+git ls-files _sesion docs/encargos 'docs/PR_*' 'docs/JUDGE_*' 'docs/STORY_*' docs/FOUNDER_FACTS.md | wc -l   # must print 0
 git grep -nE '[áéíóúñ¿¡]' -- '*.md' ':(exclude)docs/video/*' ':(exclude)docs/VIDEO_SCRIPT.md' ':(exclude)README.md' ':(exclude)docs/DEVPOST.md' ':(exclude)docs/SUBMISSION_CHECKLIST.md'   # no Spanish-language file left (names and quoted Spanish lines with English translation are fine)
 .venv/bin/python -m pytest -q                         # still green on main
 ```
