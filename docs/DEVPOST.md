@@ -1,38 +1,76 @@
 # Ask First Pay
 
-**Tagline:** An AI front desk that can take a PayPal deposit on its own, but has to ask before it moves a cent.
+**Tagline:** "Can it touch my money?" An AI front desk for clinics that can hold a PayPal deposit on its own. Only the owner's tap moves it.
 
 ## Inspiration
 
-Small service businesses (dentists, salons, physiotherapists) lose real money to no-shows, so they
-take deposits. Handing the front desk to an AI agent is tempting, but an agent that can capture,
-refund or void on its own is one prompt injection away from refunding everyone. We wanted the
-agent to do all the routine work and still leave the decision about money with the owner, in a
-way that can be proven afterwards rather than trusted.
+I run qnowa: booking with deposits for clinics and salons in Latin America. Deposits are how a
+small clinic protects itself from empty chairs. When we talk about letting an AI answer the front
+desk, the first thing owners ask is: can it touch my money?
 
-It is built for the owner of a small appointment business who runs the front desk from their
-phone: they want deposits to stop no-shows, and they want an assistant that handles bookings at
-any hour, but they are the only one who decides when a customer's money is actually taken.
+It is a fair question. Deposits create a daily job: someone decides whose deposit to keep after a
+no-show, whose to release after a cancellation, and who gets something back as a kindness. In a
+small clinic that someone is the owner, on her phone, between patients. An AI could take the
+routine work off her hands, but the danger is not a hacker. It is an assistant too kind to say no.
+
+So we built the answer into the product, designed for qnowa's clinics: **it can hold it; only you
+can move it.**
 
 ## What it does
 
-- A customer books over chat (WhatsApp-style, simulated in the demo). The agent creates a PayPal
-  order with intent **AUTHORIZE** and, when PayPal's signed `CHECKOUT.ORDER.APPROVED` webhook
-  says the customer approved it, authorizes it: the 10.00 deposit is **held, not charged**.
-- When money has to move, the agent can only **ask**:
+- **For the customer:** she books a visit in the chat (English or Spanish) and leaves a deposit
+  on PayPal. It is held, not charged. The AI does this on its own, because a hold moves nothing.
+- **For the owner:** to keep, release or give back a deposit, the AI can only ask. Her phone shows
+  what she would sign ("Keep up to $10.00 of the held deposit", the customer's name and visit),
+  never the AI's own words. One tap approves it: one tap, one PayPal call, once.
+- **At closing:** the phone's Today panel shows what the AI did on its own, the owner's taps, the
+  money kept, released and given back, and "$0.00 moved without your signature", counted from a
+  tamper-evident record anyone can check.
+- **Under the hood** (the rest of this page): the AI creates PayPal orders with intent
+  **AUTHORIZE** and, when PayPal's signed `CHECKOUT.ORDER.APPROVED` webhook says the customer
+  approved, authorizes them: the 10.00 deposit is **held, not charged**. When money has to move:
   - **No-show:** it requests a `capture_deposit` mandate for that authorization and amount. If
     the visit is more than three days after the booking (past PayPal's honor period), it first
     reauthorizes the hold, so the owner signs for the live authorization.
   - **Cancellation:** it requests a `void_deposit` mandate; the hold is released and nothing is
-    charged or refunded.
-  - **Goodwill:** after a capture, it requests a `refund_deposit` mandate for part of it.
-- The owner sees each request on their phone, built from the mandate's signed fields (not from
-  what the model wrote), and taps **Approve** once. The phone signs the mandate with a
-  non-extractable Ed25519 key that never leaves the browser.
-- Only then does the gate call PayPal, once, with the mandate's id as `PayPal-Request-Id`.
-  Approving twice, replaying, changing the amount or target, an expired mandate, or a customer
-  typing "the owner approved" are all rejected, and every attempt (accepted or rejected) is
-  appended to a hash-chained ledger whose chain check is shown on screen.
+    charged or refunded. The owner's card says "Moves $0.00 · releases the $10.00 hold".
+  - **Goodwill:** after a capture, when the customer explains a missed visit and asks for the
+    deposit back, it requests a `refund_deposit` mandate and promises nothing.
+- The owner's card is built from the mandate's signed fields, and the phone signs the mandate with
+  a non-extractable Ed25519 key that never leaves the browser.
+- Only then does the gate call PayPal, once, with the mandate's id as `PayPal-Request-Id` (shown
+  on the owner's card as "Approval id … (sent to PayPal as PayPal-Request-Id)" and next to the
+  capture id PayPal returned in the ledger). Approving twice, replaying, changing the amount or
+  target, an expired mandate, or a customer typing "the owner approved" are all rejected, and
+  every attempt (accepted or rejected) is appended to a hash-chained ledger whose chain check is
+  shown on screen.
+
+## How it differs
+
+**AP2 and ACP govern what a buyer's agent may spend. Ask First Pay governs what a seller's agent
+may do with the money after the sale.** It is seller-side: the mandate is signed by the business
+owner, not the shopper, and it covers the post-authorization lifecycle (capture, void, refund)
+that buyer-side protocols leave to the merchant.
+
+| | Who signs | Whose agent | What it governs |
+|---|---|---|---|
+| **AP2**, Agent Payments Protocol (Google, announced 2025-09-16) | The user: an Intent Mandate up front ("Buy concert tickets the moment they go on sale"), a Cart Mandate when approving a cart | The shopper's agent | Buying: what the agent may purchase for the user |
+| **ACP**, Agentic Commerce Protocol (developed by Stripe and OpenAI, Apache-2.0) | Payment tokens passed between buyer and business through the agent; the business stays merchant of record | The shopper's agent, which starts a checkout | Checkout: how an agent pays a business |
+| **PayPal's agent toolkit** (`@paypal/agent-toolkit`, `paypal-agent-toolkit`) | Nobody: tools such as `create_order`, `pay_order`, `create_refund` are called by the model | Any agent | Calling PayPal APIs from a model. Ask First Pay complements it: the same PayPal APIs, with the money-moving calls placed behind an owner's signature (`docs/agent_toolkit_decision.md`) |
+| **Ask First Pay** | The business owner, on her phone: one **single-use, seller-side mandate** per action, scoped to one PayPal resource, capped, expiring | The seller's agent (the front desk) | After the sale: **holds are free** (create order, authorize, reauthorize); **captures, voids and refunds need a mandate**, and the mandate's id becomes PayPal's `PayPal-Request-Id`, so one approval is one PayPal call |
+
+Sources: AP2, https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol
+(read 2026-11-10); ACP, https://www.agenticcommerce.dev/ (read 2026-11-10); the toolkit's tool
+list, its npm and PyPI pages as recorded in `docs/agent_toolkit_decision.md` (2026-11-04).
+
+The two sides fit together: a shopper's agent can pay with an AP2 or ACP mandate, and the
+clinic's agent still cannot keep, release or refund that money without the owner's own mandate.
+
+**Live sandbox:** the adapter is written against the PayPal sandbox and ready to run there:
+`scripts/sandbox_run.py` creates the orders, then (after a sandbox buyer approves) authorizes,
+captures through an approved mandate, retries with the same `PayPal-Request-Id`, voids a second
+hold, and appends the ids and HTTP statuses (never tokens) to `docs/SANDBOX_RUN.md`. The demo and
+the video run offline by default (scripted model, simulated PayPal) and say so on screen.
 
 ## How we built it
 
@@ -43,8 +81,8 @@ any hour, but they are the only one who decides when a customer's money is actua
   explicitly enabled. Every write sends `PayPal-Request-Id`, amounts go as two-decimal strings,
   timeouts and 5xx become transient errors, and the gate retries them with the same request id,
   so a capture that timed out after PayPal took the money is answered, not repeated.
-- **AI:** Anthropic **Claude** (Messages API with tool use) drives the agent when an API key is
-  set. Ten tools: six free (book, create the deposit order, confirm the hold, refresh an old hold
+- **AI:** Anthropic **Claude** (Messages API with tool use; model id `claude-sonnet-5-5` by
+  default, `ASK_FIRST_MODEL` overrides it) drives the agent when an API key is set. Ten tools: six free (book, create the deposit order, confirm the hold, refresh an old hold
   by reauthorizing it, list bookings, read the ledger) and four gated (request capture, request void, request refund, execute an
   approved mandate). Without a key, an offline scripted model drives the same loop and tools, so
   anyone can run the demo.
@@ -101,9 +139,10 @@ the free Community edition:
   turn one approval into two captures.
 - Keeping the model's words out of the owner's decision: the approval screen is rendered only
   from signed fields.
-- PayPal's agent toolkit exposes `pay_order` and `create_refund` as plain tools and has no
-  authorize/void; we evaluated it and wrote our own narrow adapter instead
-  (`docs/agent_toolkit_decision.md`).
+- Fitting PayPal's agent toolkit. Its tool list (as of 2026-11-04) has `pay_order` and
+  `create_refund` as plain model tools and no authorize, capture or void, so we wrote a narrow
+  adapter for the hold lifecycle and kept money-moving calls behind the owner's mandate. It
+  complements the toolkit rather than replacing it (`docs/agent_toolkit_decision.md`).
 
 ## Accomplishments that we're proud of
 
@@ -113,8 +152,10 @@ the free Community edition:
 - Replays and forged approvals are rejected in plain sight on the ledger page, with an intact
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
-  PayPal sandbox by setting environment variables.
-- 387 automated tests, all offline, including the attacks listed under "Try to break it"
+  PayPal sandbox by setting environment variables. The video is recorded from that offline demo
+  (scripted model, simulated PayPal) and says so on screen; the business and customers are
+  fictional, and the video shows no brand but PayPal's.
+- 537 automated tests (2026-11-10), all offline, including the attacks listed under "Try to break it"
   in the README.
 
 ## What we learned

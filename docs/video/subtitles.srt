@@ -1,173 +1,189 @@
 1
-00:00:00,300 --> 00:00:04,392
-If you run a small clinic or salon,
-no-shows cost you real money,
+00:00:00,300 --> 00:00:01,206
+Nine twelve.
 
 2
-00:00:04,442 --> 00:00:05,730
-so you take deposits.
+00:00:01,256 --> 00:00:04,233
+The nine o'clock patient isn't coming.
 
 3
-00:00:05,780 --> 00:00:08,469
-Giving the front desk
-to an AI is tempting,
+00:00:04,283 --> 00:00:09,650
+Her deposit is held on PayPal, and
+only the owner's tap can keep it.
 
 4
-00:00:08,519 --> 00:00:13,439
-but an agent that can charge or refund
-on its own is one bad message away from
+00:00:10,300 --> 00:00:15,758
+I run qnowa: booking with deposits for
+clinics and salons in Latin America.
 
 5
-00:00:13,489 --> 00:00:14,650
-refunding everyone.
+00:00:15,808 --> 00:00:19,650
+The first thing owners ask
+is: can it touch my money?
 
 6
-00:00:15,300 --> 00:00:19,989
-Ask First Pay lets the agent do
-the routine work with PayPal,
+00:00:20,300 --> 00:00:21,864
+Deposits stop no-shows.
 
 7
-00:00:20,039 --> 00:00:24,650
-and leaves every decision about
-moving money with the owner.
+00:00:21,914 --> 00:00:27,055
+But every day someone decides whose
+deposit to keep, release or give back.
 
 8
-00:00:25,300 --> 00:00:26,858
-A customer books.
+00:00:27,105 --> 00:00:31,686
+Our agent can hold money on its
+own, because a hold moves nothing.
 
 9
-00:00:26,908 --> 00:00:32,059
-The agent creates a PayPal
-order with intent AUTHORIZE.
+00:00:31,736 --> 00:00:33,650
+To move it, it can only ask.
 
 10
-00:00:32,109 --> 00:00:38,301
-The customer approves it, PayPal's
-signed webhook tells the agent,
+00:00:34,300 --> 00:00:36,602
+Eleven forty-eight at night.
 
 11
-00:00:38,351 --> 00:00:40,949
-and the agent authorizes it.
+00:00:36,652 --> 00:00:38,869
+Lucía books Monday at nine.
 
 12
-00:00:40,999 --> 00:00:47,475
-Ten dollars are held, not charged,
-and the agent did that on its own,
+00:00:38,919 --> 00:00:43,992
+The agent creates a PayPal order
+that only holds ten dollars.
 
 13
-00:00:47,525 --> 00:00:49,650
-because no money moved.
+00:00:44,042 --> 00:00:49,535
+She approves it, a signed notice
+tells the agent, and it confirms.
 
 14
-00:00:50,300 --> 00:00:52,542
-The customer doesn't show up.
+00:00:49,585 --> 00:00:51,047
+Held, not charged.
 
 15
-00:00:52,592 --> 00:00:56,731
-The agent can't capture the
-deposit; it can only ask.
+00:00:51,097 --> 00:00:53,650
+The owner's phone stayed quiet.
 
 16
-00:00:56,781 --> 00:01:02,421
-The owner's phone shows exactly what
-was asked, from the signed mandate,
+00:00:54,300 --> 00:00:55,935
+Nine twelve again.
 
 17
-00:01:02,471 --> 00:01:08,506
-not from the model's words: capture,
-this authorization, at most ten dollars,
+00:00:55,985 --> 00:00:59,866
+The agent can't take the deposit; it asks.
 
 18
-00:01:08,556 --> 00:01:10,166
-single use, expiring.
+00:00:59,916 --> 00:01:07,354
+The phone shows what gets signed, not what
+the AI wrote: keep up to ten dollars,
 
 19
-00:01:10,216 --> 00:01:12,537
-One tap signs it on the phone.
+00:01:07,404 --> 00:01:09,132
+this booking, once.
 
 20
-00:01:12,587 --> 00:01:16,094
-Only now does the capture
-reach PayPal, once,
+00:01:09,182 --> 00:01:15,310
+One tap signs it, and the approval
+id becomes PayPal's request id.
 
 21
-00:01:16,144 --> 00:01:19,650
-with the mandate's id
-as the idempotency key.
+00:01:15,360 --> 00:01:17,650
+One tap, one PayPal call.
 
 22
-00:01:20,300 --> 00:01:26,929
-What if the agent, or anyone,
-tries to use that approval again?
+00:01:18,300 --> 00:01:19,391
+Mid-morning.
 
 23
-00:01:26,979 --> 00:01:30,321
-The gate rejects it as a replay,
+00:01:19,441 --> 00:01:24,335
+Lucía writes that her son
+was in the emergency room.
 
 24
-00:01:30,371 --> 00:01:36,894
-and the attempt is written to
-the ledger like everything else.
+00:01:24,385 --> 00:01:28,329
+A kind assistant would refund on the spot.
 
 25
-00:01:36,944 --> 00:01:39,650
-One approval, one capture.
+00:01:28,379 --> 00:01:30,230
+Ours can't; it asks.
 
 26
-00:01:40,300 --> 00:01:44,121
-And if a customer tries to
-talk the agent into a refund?
+00:01:30,280 --> 00:01:33,368
+And sometimes the owner says yes.
 
 27
-00:01:44,171 --> 00:01:46,194
-It has no tool that can do it.
+00:01:33,418 --> 00:01:35,650
+Her money, her decision.
 
 28
-00:01:46,244 --> 00:01:49,650
-Nothing reaches the owner,
-nothing reaches PayPal.
+00:01:36,300 --> 00:01:43,727
+Someone pretends to be the owner: nothing
+reaches her phone, nothing reaches PayPal.
 
 29
-00:01:50,300 --> 00:01:52,596
-Another customer cancels.
+00:01:43,777 --> 00:01:48,267
+The agent reuses an approval:
+rejected as a replay,
 
 30
-00:01:52,646 --> 00:01:59,541
-Because the deposit was only held, the
-right move is a void, not a refund.
+00:01:48,317 --> 00:01:51,650
+and written down like everything else.
 
 31
-00:01:59,591 --> 00:02:05,641
-Releasing a hold is still a
-decision, so it also needs the owner,
+00:01:52,300 --> 00:01:53,360
+One thirty.
 
 32
-00:02:05,691 --> 00:02:08,362
-with a symbolic one-cent cap.
+00:01:53,410 --> 00:01:59,417
+Sofía cancels, in Spanish, and
+the agent answers in Spanish.
 
 33
-00:02:08,412 --> 00:02:14,650
-Approved: the authorization is
-voided and nothing was ever charged.
+00:01:59,467 --> 00:02:05,070
+We only held her money, so
+this is a void, not a refund:
 
 34
-00:02:15,300 --> 00:02:22,562
-Every attempt, accepted or rejected,
-is in a hash-chained ledger.
+00:02:05,120 --> 00:02:09,511
+it moves zero dollars
+and releases the hold.
 
 35
-00:02:22,612 --> 00:02:27,288
-Change any row and the chain check breaks.
+00:02:09,561 --> 00:02:13,650
+Still the owner's call, so still one tap.
 
 36
-00:02:27,338 --> 00:02:29,650
-Anyone can verify it.
+00:02:14,300 --> 00:02:15,478
+Closing time.
 
 37
-00:02:30,300 --> 00:02:31,729
-Ask First Pay.
+00:02:15,528 --> 00:02:16,517
+Three taps.
 
 38
-00:02:31,779 --> 00:02:39,650
-The agent asks, the owner decides, and
-PayPal moves the money exactly once.
+00:02:16,567 --> 00:02:22,942
+On its own, the agent made five
+PayPal calls and moved zero dollars.
+
+39
+00:02:22,992 --> 00:02:29,650
+Every attempt, even the refused one,
+sits in a ledger anyone can check.
+
+40
+00:02:30,300 --> 00:02:32,062
+Can it touch my money?
+
+41
+00:02:32,112 --> 00:02:33,297
+It can hold it.
+
+42
+00:02:33,347 --> 00:02:35,026
+Only you can move it.
+
+43
+00:02:35,076 --> 00:02:38,650
+Ask First Pay, designed
+for qnowa's clinics.

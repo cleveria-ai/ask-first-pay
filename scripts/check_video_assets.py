@@ -1,6 +1,6 @@
 """Keep the video assets in step: docs/video/SHOTLIST.md, docs/video/subtitles.srt and
 scripts/record_demo.py must name the same shots with the same seconds, the total must be at most
-180 s, and each shot's subtitles must say exactly its "Say" text inside its time window.
+165 s (2:45), and each shot's subtitles must say exactly its "Say" text inside its time window.
 
     .venv/bin/python scripts/check_video_assets.py              # check; exit 1 on any problem
     .venv/bin/python scripts/check_video_assets.py --write-srt  # regenerate subtitles.srt
@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SHOTLIST = ROOT / "docs" / "video" / "SHOTLIST.md"
 SRT = ROOT / "docs" / "video" / "subtitles.srt"
-LIMIT_S = 180
+LIMIT_S = 165          # the work order caps this cut at 2:45 (the rules allow 3:00)
 MAX_WPS = 3.2            # faster than this is not narration, it is a race
 MAX_CUE_CHARS = 84       # two lines of 42
 
