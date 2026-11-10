@@ -90,7 +90,7 @@ git log main --name-only --format= | sort -u | grep -E '(^|/)\.env|\.sqlite|\.pe
 
 Each command must print nothing. (The first one, without the `grep -v`, also prints one old test
 line, `tests/security/test_security_secrets.py` at commit `f0ab477`, whose key is the literal
-fake `sk-ant-api03-FAKEFAKEFAKEFAKEFAKE`; that is expected.) If anything else prints, stop: do not
+fake made of the word FAKE repeated; that is expected.) If anything else prints, stop: do not
 publish, and rotate the credential first.
 
 **4. Then:** push `main`, make the repository public, and check the About section shows Apache-2.0.
