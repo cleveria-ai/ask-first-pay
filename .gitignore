@@ -10,3 +10,4 @@ build/
 *.jsonl
 node_modules/
 docs/rules/
+docs/video/out/

@@ -1,6 +1,8 @@
-"""Drive the demo shot by shot (docs/video/SHOTLIST.md) in headless Chromium at 1280x720 and save
-one .webm per shot in docs/video/raw/. No voice, no editing: the operator records the narration
-over these clips and cuts them together.
+"""Drive the demo shot by shot (docs/video/SHOTLIST.md) in headless Chromium and save one .webm per
+shot in docs/video/raw/: a 1280x720 layout rendered at device scale 1.5, so each clip is a sharp
+1920x1080, plus a .json with where the shot starts in the clip and how long it ran. No voice:
+scripts/make_video.py cuts the clips into docs/video/out/ask_first_pay.mp4 and the founder can add
+the narration over it (docs/video/VOICE_OVER.md).
 
     .venv/bin/pip install -e ".[browser]"   # Playwright; then: .venv/bin/python -m playwright install chromium
     .venv/bin/python scripts/record_demo.py              # starts the demo in-process, offline
@@ -31,6 +33,7 @@ approval page, which the operator records by hand (see SHOTLIST.md, checklist).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import socket
@@ -41,7 +44,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "docs" / "video" / "raw"
-SIZE = {"width": 1280, "height": 720}
+SIZE = {"width": 1280, "height": 720}           # CSS layout of the stage
+SCALE = 1.5                                     # device pixels per CSS pixel: text drawn at 1080p
+VIDEO = {"width": 1920, "height": 1080}         # = SIZE * SCALE, the size of every raw clip
 CHROMIUM = os.environ.get("ASK_FIRST_CHROMIUM", "/opt/pw-browsers/chromium")
 REPO_URL = "github.com/cleveria-ai/ask-first-pay"
 
@@ -106,6 +111,8 @@ def plan() -> str:
 
 
 def free_port() -> int:
+    if os.environ.get("ASK_FIRST_RECORD_PORT"):  # a fixed port, e.g. to stay clear of 8765
+        return int(os.environ["ASK_FIRST_RECORD_PORT"])
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
@@ -140,6 +147,7 @@ class Shot:
         self.start_mode = mode                    # stage classes from the first frame, e.g. "phone-only"
 
     def __enter__(self):
+        self.t_open = time.monotonic()            # the clip starts here (page load at its head)
         self.page = self.ctx.new_page()
         self.page.goto(self.base + "/__stage" + (f"#{self.start_mode}" if self.start_mode else ""))
         self.chat = self.page.frame_locator("#chat")
@@ -154,6 +162,7 @@ class Shot:
             if left > 0:
                 self.page.wait_for_timeout(int(left * 1000))
         video = self.page.video
+        content = time.monotonic() - self.t0
         if exc[0] is None:                        # last frame as a still, to check the clip at a glance
             self.page.screenshot(path=str(RAW / f"{self.n:02d}-{self.slug}.png"))
         self.page.close()
@@ -161,6 +170,10 @@ class Shot:
             dest = RAW / f"{self.n:02d}-{self.slug}.webm"
             video.save_as(str(dest))
             video.delete()
+            # where the shot really starts and how long it ran: scripts/make_video.py cuts here
+            dest.with_suffix(".json").write_text(json.dumps(
+                {"head_s": round(self.t0 - self.t_open, 3), "content_s": round(content, 3),
+                 "planned_s": self.seconds}) + "\n", encoding="utf-8")
             print(f"  saved {dest.relative_to(ROOT)}")
         return False
 
@@ -311,7 +324,8 @@ def record(base: str, code: str, simulated: bool, only: set[int] | None) -> None
     done: set[str] = set()                        # story steps already on the server
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=CHROMIUM if Path(CHROMIUM).exists() else None)
-        ctx = browser.new_context(viewport=SIZE, record_video_dir=str(tmp), record_video_size=SIZE)
+        ctx = browser.new_context(viewport=SIZE, device_scale_factor=SCALE,
+                                  record_video_dir=str(tmp), record_video_size=VIDEO)
         ctx.route(base + "/**", lambda route: stage_route(route, base))
         pair(ctx, base, code)
         want = lambda n: only is None or n in only                                    # noqa: E731
