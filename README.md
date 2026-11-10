@@ -1,6 +1,6 @@
 # Ask First Pay
 
-**Work in progress, private until submission.** Entry for the PayPal AI Hackathon 2026.
+Entry for the PayPal AI Hackathon 2026.
 
 An AI front desk for a service business takes appointment deposits through PayPal and only *holds* them.
 When money must actually move (capture after a no-show, void after a cancellation, refund as goodwill),
