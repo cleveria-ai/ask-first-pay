@@ -99,7 +99,8 @@ The full records, with every HTTP call's method, path and status (never tokens o
 keeps these tables and those records in step. In these runs the agent was the offline scripted
 model, and PayPal's webhook was not used (the buyer's return to the site confirmed the hold). The
 demo and the video run offline by default (scripted model, simulated PayPal) and say so on screen,
-so anyone can run them without keys.
+so anyone can run them without keys; the video adds one still of the sandbox ledger
+(`docs/screenshots/12-sandbox-ledger.png`), labelled as a screenshot.
 
 ## How we built it
 
@@ -141,7 +142,13 @@ so anyone can run them without keys.
 The owner's mandate list (`/owner`) and the ledger (`/ledger`) are AG Grid Community 36.3.0
 grids, vendored and served locally (`src/ask_first_pay/demo/static/vendor/`, MIT license file
 alongside, no CDN). Setup in `src/ask_first_pay/demo/static/grid.js`; every feature used is in
-the free Community edition:
+the free Community edition.
+
+Why a grid: the product's promise is that the owner can check it. At closing she asks "what did
+the AI do with my money today, and what did it try that I never approved?" The grid answers in
+two taps: filter to *Rejected*, tap the row, read what was attempted and which approval it tried
+to reuse. In the sandbox run the same grid shows PayPal's own ids next to each approval
+(`docs/screenshots/12-sandbox-ledger.png`).
 
 - **Sorting** on every column (the ledger opens newest first; shift-click for multi-column).
 - **Filtering**: text and number column filters, **external filters** wired to the
@@ -186,7 +193,8 @@ the free Community edition:
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
   PayPal sandbox by setting environment variables. The video is recorded from that offline demo
-  (scripted model, simulated PayPal) and says so on screen; the business and customers are
+  (scripted model, simulated PayPal) and says so on screen, plus one still screenshot of the
+  ledger after the sandbox run; the business and customers are
   fictional, and the video shows no brand but PayPal's.
 - 545 automated tests (2026-11-11), all offline, including the attacks listed under "Try to break it"
   in the README.
