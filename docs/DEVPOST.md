@@ -5,8 +5,11 @@
 ## Inspiration
 
 I run qnowa: booking with deposits for clinics and salons in Latin America. Deposits are how a
-small clinic protects itself from empty chairs. When we talk about letting an AI answer the front
-desk, the first thing owners ask is: can it touch my money?
+small clinic protects itself from empty chairs, and empty chairs are common: a systematic review
+of 105 studies of health-care appointments put the average no-show rate at about 23% (Dantas et
+al., *Health Policy* 122(4), 2018, doi:10.1016/j.healthpol.2018.02.002; a figure from the
+literature, not from qnowa's own data). When we talk about letting an AI answer the front desk,
+the first thing owners ask is: can it touch my money?
 
 It is a fair question. Deposits create a daily job: someone decides whose deposit to keep after a
 no-show, whose to release after a cancellation, and who gets something back as a kindness. In a
