@@ -4,14 +4,70 @@
 without a voice: the narration below is burned in as large captions in a band at the bottom (from
 `docs/video/subtitles.srt`), and so are the lower thirds, the yellow PayPal-call captions, the
 cards and the English subtitles for the Spanish lines. Its audio track is silent. It can be
-uploaded as it is. To add the founder's voice, record the lines below and run one ffmpeg command;
-the voice version keeps the burned-in narration (the mix copies the picture untouched), so a
-viewer with the sound off still follows it.
+uploaded as it is. To add the founder's voice, record the eleven lines once, at your own pace,
+without watching the video, and run one command: `scripts/place_voice.py` cuts the recording at
+its pauses and puts each line on its shot. The voice version keeps the burned-in narration (the
+mix copies the picture untouched), so a viewer with the sound off still follows it.
+
+## Record once, at your own pace
+
+```bash
+.venv/bin/python scripts/place_voice.py --take docs/video/out/voice.m4a
+```
+
+Run it from the repository root. It writes `docs/video/out/ask_first_pay_voice.mp4` and, next to
+it, `voice_report.txt`: a table with each line, the second it starts at, how long it is, the room
+its shot leaves, the speed it was played at and the slack. Before it says `wrote ...` the command
+checks its own output: same length as the video, under 170 s, the picture identical to the
+original (it is copied, not re-encoded), and an audio track that is not silent, levelled to
+−16 LUFS (the usual target for speech on YouTube). Needs only Python and ffmpeg.
+
+To try the tool before recording anything: `.venv/bin/python scripts/place_voice.py --self-test`
+places eleven tone bursts on the real video (`docs/video/out/voice_selftest.mp4`) and checks where
+each one starts. It never touches `ask_first_pay_voice.mp4`.
+
+### Five minutes with a phone
+
+1. **The room.** Quiet, with soft things in it (a bed, a sofa, curtains). Windows shut, fan and
+   air conditioning off, phone on do-not-disturb.
+2. **The phone.** Stand it on a table against a pile of books, level with your mouth, a hand's
+   width away (15-20 cm) and a little to one side, so your breath does not hit the microphone.
+   Do not hold it. Open the voice recorder (Voice Memos on an iPhone, Recorder on Android).
+3. **Read** the eleven lines below from this page, in order. Press record, wait two seconds,
+   start. **Between two lines, stay silent for two seconds** (count "one thousand one, one
+   thousand two" in your head). Inside a line, breathe at the full stops, but never stop for a
+   whole second: a pause that long is where the recording gets cut.
+4. **A line went wrong?** Keep recording: stay silent two seconds, say the whole line again, and
+   go on to the next. You sort it out afterwards with `--pick` (below).
+5. After the last line wait two seconds and stop. That is one take of about three minutes.
+6. **To the computer.** Send the recording to yourself as a file (AirDrop, email, a cloud drive
+   or a USB cable; not as a voice message in a chat, which gets compressed again) and save it as
+   `docs/video/out/voice.m4a`. That folder is git-ignored, so recordings never enter the
+   repository. Any format ffmpeg reads will do (m4a, mp3, wav, ogg, even a video): use the
+   file's real name in the command.
+
+Lines 3 and 10 have the least room (13.4 s and 7.4 s: about 2.7 words a second), then 2, 11 and
+1. Read those briskly; the rest fit at a calm pace.
+
+### What the command answers
+
+| It says | What happened | What to do |
+|---|---|---|
+| `wrote docs/video/out/ask_first_pay_voice.mp4 and ...` | Done and checked. | Play it once, start to finish, with sound. |
+| `line 2 (founder) ran long: sped up x1.045` | The line was a little longer than its shot and was sped up to fit (at most 12 %, pitch unchanged). | Nothing. |
+| `found 12 pieces; the video has 11 lines`, then a table of the pieces (number, start, length); exit code 2 | A line was said twice, or a pause was too long or too short. Nothing was written. | Said twice: name the pieces to use, in the order of the lines. `--pick 1,2,4,5,6,7,8,9,10,11,12` leaves piece 3 out. A line that broke in two at a long pause: `--pick 1,2+3,4,...` joins pieces 2 and 3. Two lines that ran together: split at shorter pauses with `--min-gap 0.7` (default 1.0; the message names a value when one gives exactly eleven pieces). |
+| `line 10 (sandbox) does not fit: ... still 0.92 s too long`; exit code 3 | That line is longer than its shot even at the top speed. Nothing was written: a line is never cut. | Mildest first. `--tighten` shortens the pauses inside the lines that run long (never under 0.3 s; no word is touched). `--max-tempo 1.2` allows more speed (the message names the value that fits every line; up to about 1.25 a voice still sounds natural). Or say only those lines again, brisker, into a second recording and pick its pieces: `--take docs/video/out/voice.m4a docs/video/out/fix.m4a --pick 1,2,12,4,5,6,7,8,9,13,11` (the second recording's pieces are numbered after the first's). |
+
+The first line of the output says what the command took for silence, for example `under -41.5 dB
+(auto) is silence`: by default 20 dB under the voice of that recording, and at least 10 dB over
+its quiet parts, so a quiet phone or a room with some noise needs no setting. If the pieces still
+come out wrong in a noisy room, raise it by hand: `--silence-db -25`.
 
 ## The lines
 
-Exactly the "Say" column of `docs/video/SHOTLIST.md` (and `docs/video/subtitles.srt`). Start
-each line at its time (0.3 s after the shot starts); every line fits its shot at a calm pace.
+Exactly the "Say" column of `docs/video/SHOTLIST.md` (and `docs/video/subtitles.srt`). With
+`place_voice.py` you do not watch the clock: each line is placed at its "Start" (0.3 s after the
+shot starts) and must end by "Ends by". The times matter only if you mix by hand (below).
 
 | Shot | Start | Ends by | Say |
 |---|---|---|---|
@@ -30,35 +86,37 @@ each line at its time (0.3 s after the shot starts); every line fits its shot at
 Never read the approval id, a PayPal id or a date aloud (the screen shows "Mon 16 Nov" and the
 recording day; shot 10 shows the sandbox run's ids and date as text).
 
-## How to record
+## Other ways
+
+### One file per line
+
+Record eleven short files, one line each, named `01.*` to `11.*` in any format ffmpeg reads (a
+synthetic voice saved line by line works the same way), put them in `docs/video/out/voice/` and
+run:
+
+```bash
+.venv/bin/python scripts/place_voice.py --lines docs/video/out/voice
+```
+
+Each file is trimmed to its first and last sound, placed on its shot, and fitted, checked and
+reported exactly as above.
+
+### By hand, with ffmpeg alone
 
 Quiet room, soft furnishings around you, phone or laptop microphone a hand's width from your
-mouth, slightly to the side. Notifications off.
+mouth, slightly to the side. Notifications off. Copy the files into `docs/video/out/` and run the
+commands from the repository root. The video stream is copied untouched; the voice is levelled to
+−16 LUFS and padded with silence to the video's length (no music, nothing ducked).
 
-**Option A: one take (simplest).** Play `ask_first_pay.mp4` muted on one screen (the video is
-the prompter: each shot's visuals tell you where you are) and read from this page. Start the
-recorder and the video at the same moment, and read each line when its shot appears. Save as
+**Option A: one take in step with the video.** Play `ask_first_pay.mp4` muted on one screen (the
+video is the prompter: each shot's visuals tell you where you are) and read from this page. Start
+the recorder and the video at the same moment, and read each line when its shot appears. Save as
 `voice.m4a` (iPhone Voice Memos and Android
 recorders save m4a; on a laptop, QuickTime "New Audio Recording" or Audacity export to m4a/wav).
 If the recorder started before the video, set `TRIM` in the command below to the seconds to cut
 from the head of the recording; if it started after the video, set `DELAY_MS` to the
 milliseconds of silence to put before it. (Tip: say "mark" as you press play; the time of "mark"
 in the recording is your `TRIM`.)
-
-**Option B: per shot.** Record eleven short files `voice/01.m4a` … `voice/11.m4a`, one line each,
-starting to speak right away (no more than a breath of silence at the head). Each is placed at
-its start time above. A line that runs long only overlaps the next shot's first 0.3 s of silence;
-keep it within "Ends by".
-
-Copy the files into `docs/video/out/` (git-ignored, so the recordings never enter the repository)
-and run the commands from the repository root.
-
-## Mix (no music, nothing ducked)
-
-The video stream is copied untouched; the voice is levelled to −16 LUFS (the usual target for
-speech on YouTube) and padded with silence to the video's length.
-
-**Option A, one take:**
 
 ```bash
 TRIM=0       # seconds cut from the head of voice.m4a (recorder started before the video)
@@ -69,7 +127,10 @@ ffmpeg -y -i docs/video/out/ask_first_pay.mp4 -i docs/video/out/voice.m4a \
   docs/video/out/ask_first_pay_voice.mp4
 ```
 
-**Option B, per shot** (each file starts at its shot's start + 0.3 s):
+**Option B: per shot.** Record eleven short files `voice/01.m4a` … `voice/11.m4a`, one line each,
+starting to speak right away (no more than a breath of silence at the head). Each is placed at
+its start time above (its shot's start + 0.3 s). A line that runs long only overlaps the next
+shot's first 0.3 s of silence; keep it within "Ends by".
 
 ```bash
 cd docs/video/out && ffmpeg -y -i ask_first_pay.mp4 \
@@ -87,7 +148,7 @@ aresample=48000,aformat=channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11,apa
   ask_first_pay_voice.mp4 && cd ../../..
 ```
 
-Check it: `ffprobe -v error -show_entries format=duration -of csv=p=0 docs/video/out/ask_first_pay_voice.mp4`
+Check a hand-made mix: `ffprobe -v error -show_entries format=duration -of csv=p=0 docs/video/out/ask_first_pay_voice.mp4`
 must print about 167 (under 170), and play it once start to finish with sound.
 
 ## YouTube upload
