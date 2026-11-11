@@ -192,6 +192,19 @@ def test_place_voice_wrong_number_of_pieces_is_exit_code_2_and_pick_solves_it(vi
 
 
 @needs_ffmpeg
+def test_place_voice_a_second_recording_replaces_a_line_through_pick(video, tmp_path, capsys):
+    first, second = tmp_path / "voice.m4a", tmp_path / "fix.m4a"
+    pv.make_test_take(first, [2.0, 5.5, 1.5])                     # line 2 is too long for its shot
+    pv.make_test_take(second, [3.0], lead=1.0)                    # the same line said again, brisker
+    assert place(video, tmp_path, "--take", first, second)[0] == 2            # four pieces: say which
+    assert "    4 " in capsys.readouterr().out and not (tmp_path / "voice.mp4").exists()
+    code, out = place(video, tmp_path, "--take", first, second, "--pick", "1,4,3")
+    assert code == 0 and "take voice.m4a, fix.m4a, --pick 1,4,3" in capsys.readouterr().out
+    a, b = sounds(out, tmp_path)[1]
+    assert 0 <= a - STARTS[1] < pv.ONSET_TOLERANCE_S and b - a == pytest.approx(3.0, abs=0.06)
+
+
+@needs_ffmpeg
 def test_place_voice_takes_one_file_per_line_in_any_format(video, tmp_path, capsys):
     folder = tmp_path / "voice"
     folder.mkdir()
