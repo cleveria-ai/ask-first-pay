@@ -45,15 +45,15 @@ def test_make_video_without_timing_takes_the_seconds_before_the_tail(tmp_path):
 def test_make_video_refuses_a_missing_clip_or_a_cut_over_the_limit(tmp_path):
     with pytest.raises(SystemExit, match="missing raw clip"):
         mv.plan([(1, "a", 10)], tmp_path, duration=lambda p: 12.0)
-    rows = [(1, "a", 100), (2, "b", 65)]
-    with pytest.raises(SystemExit, match="under 165"):
-        mv.plan(rows, tmp_path, duration=fake_raw(tmp_path, rows, [101, 66], [0.5, 0.5]))
+    rows = [(1, "a", 100), (2, "b", 70)]
+    with pytest.raises(SystemExit, match="under 170"):
+        mv.plan(rows, tmp_path, duration=fake_raw(tmp_path, rows, [101, 71], [0.5, 0.5]))
 
 
 def test_make_video_real_shots_fit_the_script():
     rows = mv.shots()
-    assert [r[0] for r in rows] == list(range(1, 11))
-    assert sum(r[2] for r in rows) == 159 < mv.LIMIT_S
+    assert [r[0] for r in rows] == list(range(1, 12))
+    assert sum(r[2] for r in rows) == 167 < mv.LIMIT_S <= 170 < 180      # the rules: under 3:00
 
 
 def test_make_video_command_is_h264_aac_1080p_and_never_changes_speed(tmp_path):

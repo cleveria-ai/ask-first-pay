@@ -24,9 +24,11 @@ each line at its time (0.3 s after the shot starts); every line fits its shot at
 | 7 | 1:36.3 | 1:51.7 | Someone pretends to be the owner: nothing reaches her phone, nothing reaches PayPal. The agent reuses an approval: rejected as a replay, and written down like everything else. |
 | 8 | 1:52.3 | 2:13.7 | One thirty. Sofía cancels, in Spanish, and the agent answers in Spanish. We only held her money, so this is a void, not a refund: it moves zero dollars and releases the hold. Still the owner's call, so still one tap. |
 | 9 | 2:14.3 | 2:29.7 | Closing time. Three taps. On its own, the agent made five PayPal calls and moved zero dollars. Every attempt, even the refused one, sits in a ledger anyone can check. |
-| 10 | 2:30.3 | 2:38.7 | Can it touch my money? It can hold it. Only you can move it. Ask First Pay, designed for qnowa's clinics. |
+| 10 | 2:30.3 | 2:37.7 | Not only a simulation. Capture, void and refund ran against the real PayPal sandbox. The ids are in the repository. |
+| 11 | 2:38.3 | 2:46.7 | Can it touch my money? It can hold it. Only you can move it. Ask First Pay, designed for qnowa's clinics. |
 
-Never read the approval id or a date aloud (the screen shows "Mon 16 Nov" and the recording day).
+Never read the approval id, a PayPal id or a date aloud (the screen shows "Mon 16 Nov" and the
+recording day; shot 10 shows the sandbox run's ids and date as text).
 
 ## How to record
 
@@ -43,7 +45,7 @@ from the head of the recording; if it started after the video, set `DELAY_MS` to
 milliseconds of silence to put before it. (Tip: say "mark" as you press play; the time of "mark"
 in the recording is your `TRIM`.)
 
-**Option B: per shot.** Record ten short files `voice/01.m4a` … `voice/10.m4a`, one line each,
+**Option B: per shot.** Record eleven short files `voice/01.m4a` … `voice/11.m4a`, one line each,
 starting to speak right away (no more than a breath of silence at the head). Each is placed at
 its start time above. A line that runs long only overlaps the next shot's first 0.3 s of silence;
 keep it within "Ends by".
@@ -73,19 +75,20 @@ ffmpeg -y -i docs/video/out/ask_first_pay.mp4 -i docs/video/out/voice.m4a \
 cd docs/video/out && ffmpeg -y -i ask_first_pay.mp4 \
   -i voice/01.m4a -i voice/02.m4a -i voice/03.m4a -i voice/04.m4a -i voice/05.m4a \
   -i voice/06.m4a -i voice/07.m4a -i voice/08.m4a -i voice/09.m4a -i voice/10.m4a \
+  -i voice/11.m4a \
   -filter_complex "\
 [1:a]adelay=300:all=1[a1];[2:a]adelay=10300:all=1[a2];[3:a]adelay=20300:all=1[a3];\
 [4:a]adelay=34300:all=1[a4];[5:a]adelay=54300:all=1[a5];[6:a]adelay=78300:all=1[a6];\
 [7:a]adelay=96300:all=1[a7];[8:a]adelay=112300:all=1[a8];[9:a]adelay=134300:all=1[a9];\
-[10:a]adelay=150300:all=1[a10];\
-[a1][a2][a3][a4][a5][a6][a7][a8][a9][a10]amix=inputs=10:normalize=0:duration=longest,\
+[10:a]adelay=150300:all=1[a10];[11:a]adelay=158300:all=1[a11];\
+[a1][a2][a3][a4][a5][a6][a7][a8][a9][a10][a11]amix=inputs=11:normalize=0:duration=longest,\
 aresample=48000,aformat=channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11,apad[a]" \
   -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -ar 48000 -shortest -movflags +faststart \
   ask_first_pay_voice.mp4 && cd ../../..
 ```
 
 Check it: `ffprobe -v error -show_entries format=duration -of csv=p=0 docs/video/out/ask_first_pay_voice.mp4`
-must print about 159 (under 165), and play it once start to finish with sound.
+must print about 167 (under 170), and play it once start to finish with sound.
 
 ## YouTube upload
 
@@ -95,7 +98,7 @@ Upload `ask_first_pay_voice.mp4` if you recorded the voice, otherwise `ask_first
 |---|---|
 | Title | `Ask First Pay: an AI front desk that can hold a PayPal deposit, never move it` |
 | Description | the block below |
-| Thumbnail | auto-generated is fine; the frame at 2:30 (closing card) reads best |
+| Thumbnail | auto-generated is fine; the frame at 2:40 (closing card) reads best |
 | Audience | **No, it's not made for kids** |
 | Subtitles | None needed: the narration is burned in. Do not upload `subtitles.srt` as captions (they would repeat the burned-in text) |
 | Music | none (no third-party music; nothing to claim) |
@@ -112,7 +115,8 @@ I run qnowa: booking with deposits for clinics and salons in Latin America. When
 - To keep (capture), release (void) or give back (refund) a deposit, the AI can only ask. The owner's phone shows what she would sign, never the AI's own words. One tap, one PayPal call, once: the approval id is sent to PayPal as the PayPal-Request-Id.
 - Replays, a customer pretending to be the owner, changed amounts and expired approvals are refused, and every attempt is written to a hash-chained ledger anyone can check.
 
-Recorded offline: scripted model, simulated PayPal. The live model uses the same tools.
+The demo is recorded offline: scripted model, simulated PayPal. The live model uses the same tools.
+At 2:30, a still screenshot of the ledger after a run against the real PayPal sandbox (2026-11-11); the record, with PayPal's ids, is docs/SANDBOX_UI_RUN.md in the repository.
 The clinic and the customers are fictional.
 
 Code: https://github.com/cleveria-ai/ask-first-pay

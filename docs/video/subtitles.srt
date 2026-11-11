@@ -172,18 +172,31 @@ Every attempt, even the refused one,
 sits in a ledger anyone can check.
 
 40
-00:02:30,300 --> 00:02:32,062
-Can it touch my money?
+00:02:30,300 --> 00:02:31,691
+Not only a simulation.
 
 41
-00:02:32,112 --> 00:02:33,297
-It can hold it.
+00:02:31,741 --> 00:02:35,685
+Capture, void and refund ran
+against the real PayPal sandbox.
 
 42
-00:02:33,347 --> 00:02:35,026
-Only you can move it.
+00:02:35,735 --> 00:02:37,650
+The ids are in the repository.
 
 43
-00:02:35,076 --> 00:02:38,650
+00:02:38,300 --> 00:02:40,062
+Can it touch my money?
+
+44
+00:02:40,112 --> 00:02:41,297
+It can hold it.
+
+45
+00:02:41,347 --> 00:02:43,026
+Only you can move it.
+
+46
+00:02:43,076 --> 00:02:46,650
 Ask First Pay, designed
 for qnowa's clinics.
