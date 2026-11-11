@@ -19,8 +19,10 @@ Run it from the repository root. It writes `docs/video/out/ask_first_pay_voice.m
 it, `voice_report.txt`: a table with each line, the second it starts at, how long it is, the room
 its shot leaves, the speed it was played at and the slack. Before it says `wrote ...` the command
 checks its own output: same length as the video, under 170 s, the picture identical to the
-original (it is copied, not re-encoded), and an audio track that is not silent, levelled to
-−16 LUFS (the usual target for speech on YouTube). Needs only Python and ffmpeg.
+original (it is copied, not re-encoded), an audio track that is not silent, levelled to
+−16 LUFS (the usual target for speech on YouTube), and, by listening to the mix, that every line
+sits within 80 ms of its second and is over before the cut that ends its shot. If any of that
+fails, no file is written and the message names the line. Needs only Python and ffmpeg.
 
 To try the tool before recording anything: `.venv/bin/python scripts/place_voice.py --self-test`
 places eleven tone bursts on the real video (`docs/video/out/voice_selftest.mp4`) and checks where
@@ -47,19 +49,19 @@ each one starts. It never touches `ask_first_pay_voice.mp4`.
    repository. Any format ffmpeg reads will do (m4a, mp3, wav, ogg, even a video): use the
    file's real name in the command.
 
-Lines 3 and 10 have the least room (13.4 s and 7.4 s: about 2.7 words a second, a newsreader's
-pace), then 2, 11 and 1. Read those briskly and do not linger at their full stops; the rest fit
-at a calm pace. If the command still answers that line 10 does not fit, `--tighten --max-tempo
-1.25` is the quick way out (see the table below).
+Lines 3 and 1 have the least room (the "Room" column of the table of lines says how much each
+one has and marks them tight): read those two briskly and do not linger at their full stops. The
+rest fit at a calm pace.
 
 ### What the command answers
 
 | It says | What happened | What to do |
 |---|---|---|
 | `wrote docs/video/out/ask_first_pay_voice.mp4 and ...` | Done and checked. | Play it once, start to finish, with sound. |
-| `line 2 (founder) ran long: sped up x1.045` | The line was a little longer than its shot and was sped up to fit (at most 12 %, pitch unchanged). | Nothing. |
-| `found 12 pieces; the video has 11 lines`, then a table of the pieces (number, start, length); exit code 2 | A line was said twice, or a pause was too long or too short. Nothing was written. | Said twice: name the pieces to use, in the order of the lines. `--pick 1,2,4,5,6,7,8,9,10,11,12` leaves piece 3 out. A line that broke in two at a long pause: `--pick 1,2+3,4,...` joins pieces 2 and 3. Two lines that ran together: split at shorter pauses with `--min-gap 0.8` (default 1.2; the message names a value when one gives exactly eleven pieces). |
-| `line 10 (sandbox) does not fit: ... still 0.92 s too long`; exit code 3 | That line is longer than its shot even at the top speed. Nothing was written: a line is never cut. | Mildest first. `--tighten` shortens the pauses inside the lines that run long (never under 0.3 s; no word is touched). `--max-tempo 1.2` allows more speed (the message names the value that fits every line; up to about 1.25 a voice still sounds natural). Or say only those lines again, brisker, into a second recording and pick its pieces: `--take docs/video/out/voice.m4a docs/video/out/fix.m4a --pick 1,2,12,4,5,6,7,8,9,13,11` (the second recording's pieces are numbered after the first's). |
+| `line 3 (answer) ran long: sped up x1.045` | The line was a little longer than its shot and was sped up to fit (by ×1.12 at most, never more; pitch unchanged). | Nothing. |
+| `ignored a 0.31 s sound at 52.4 s (shorter than 0.6 s)` | Something shorter than 0.6 s between two pauses was left out: a click, a cough. | Nothing, unless it was a word: then say that line again (see the last row). |
+| `found 12 pieces; the video has 11 lines`, then a table of the pieces (number, start, length); exit code 2 | A line was said twice, a noise lasted over 0.6 s, or a pause was too long or too short. Nothing was written. | A noise (the phone picked up after the last line): the message names the piece and the `--pick` that leaves it out. Said twice: name the pieces to use, in the order of the lines. `--pick 1,2,4,5,6,7,8,9,10,11,12` leaves piece 3 out. A line that broke in two at a long pause: `--pick 1,2+3,4,...` joins pieces 2 and 3. Two lines that ran together: split at shorter pauses with `--min-gap 0.8` (default 1.2; the message names a value when one gives exactly eleven pieces). |
+| `line 3 (answer) does not fit: ... still 0.78 s too long`; exit code 3 | That line is longer than its shot even sped up ×1.12, and the voice is never sped up more than that. Nothing was written: a line is never cut. | First `--tighten`: it shortens the pauses inside the lines that run long (never under 0.3 s; no word is touched). If that is not enough, say only those lines again, brisker, into a second recording and pick its pieces: `--take docs/video/out/voice.m4a docs/video/out/fix.m4a --pick 1,2,12,4,5,6,7,8,9,10,11` puts the new recording's first piece (number 12: its pieces are numbered after the first recording's eleven) in the place of line 3. |
 
 The first line of the output says what the command took for silence, for example `under -41.5 dB
 (auto) is silence`: by default 20 dB under the voice of that recording, and at least 10 dB over
@@ -72,19 +74,24 @@ Exactly the "Say" column of `docs/video/SHOTLIST.md` (and `docs/video/subtitles.
 `place_voice.py` you do not watch the clock: each line is placed at its "Start" (0.3 s after the
 shot starts) and must end by "Ends by". The times matter only if you mix by hand (below).
 
-| Shot | Start | Ends by | Say |
-|---|---|---|---|
-| 1 | 0:00.3 | 0:09.7 | Nine twelve. The nine o'clock patient isn't coming. Her deposit is held on PayPal, and only the owner's tap can keep it. |
-| 2 | 0:10.3 | 0:19.7 | I run qnowa: booking with deposits for clinics and salons in Latin America. The first thing owners ask is: can it touch my money? |
-| 3 | 0:20.3 | 0:33.7 | Deposits stop no-shows. But every day someone decides whose deposit to keep, release or give back. Our agent can hold money on its own, because a hold moves nothing. To move it, it can only ask. |
-| 4 | 0:34.3 | 0:53.7 | Eleven forty-eight at night. Lucía books Monday at nine. The agent creates a PayPal order that only holds ten dollars. She approves it, a signed notice tells the agent, and it confirms. Held, not charged. The owner's phone stayed quiet. |
-| 5 | 0:54.3 | 1:17.7 | Nine twelve again. The agent can't take the deposit; it asks. The phone shows what gets signed, not what the AI wrote: keep up to ten dollars, this booking, once. One tap signs it, and the approval id becomes PayPal's request id. One tap, one PayPal call. |
-| 6 | 1:18.3 | 1:35.7 | Mid-morning. Lucía writes that her son was in the emergency room. A kind assistant would refund on the spot. Ours can't; it asks. And sometimes the owner says yes. Her money, her decision. |
-| 7 | 1:36.3 | 1:51.7 | Someone pretends to be the owner: nothing reaches her phone, nothing reaches PayPal. The agent reuses an approval: rejected as a replay, and written down like everything else. |
-| 8 | 1:52.3 | 2:13.7 | One thirty. Sofía cancels, in Spanish, and the agent answers in Spanish. We only held her money, so this is a void, not a refund: it moves zero dollars and releases the hold. Still the owner's call, so still one tap. |
-| 9 | 2:14.3 | 2:29.7 | Closing time. Three taps. On its own, the agent made five PayPal calls and moved zero dollars. Every attempt, even the refused one, sits in a ledger anyone can check. |
-| 10 | 2:30.3 | 2:37.7 | Not only a simulation. Capture, void and refund ran against the real PayPal sandbox. The ids are in the repository. |
-| 11 | 2:38.3 | 2:46.7 | Can it touch my money? It can hold it. Only you can move it. Ask First Pay, designed for qnowa's clinics. |
+"Room" is the longest the line may last (its shot less 0.3 s at each end) and the pace that
+takes: its words divided by those seconds, pauses included. A calm read is about 2 words a
+second, and the command's speed-up (×1.12 at most) stretches that to about 2.2; a line that asks
+for more than 2.2 words a second is marked **tight** and needs a brisk read.
+
+| Shot | Start | Ends by | Room | Say |
+|---|---|---|---|---|
+| 1 | 0:00.3 | 0:09.7 | 9.4 s (2.3 words/s, **tight**) | Nine twelve. The nine o'clock patient isn't coming. Her deposit is held on PayPal, and only the owner's tap can keep it. |
+| 2 | 0:10.3 | 0:19.7 | 9.4 s (2.1 words/s) | I run qnowa: deposit booking for clinics in Latin America. The first thing owners ask: can it touch my money? |
+| 3 | 0:20.3 | 0:33.7 | 13.4 s (2.7 words/s, **tight**) | Deposits stop no-shows. But every day someone decides whose deposit to keep, release or give back. Our agent can hold money on its own, because a hold moves nothing. To move it, it can only ask. |
+| 4 | 0:34.3 | 0:53.7 | 19.4 s (2.1 words/s) | Eleven forty-eight at night. Lucía books Monday at nine. The agent creates a PayPal order that only holds ten dollars. She approves it, a signed notice tells the agent, and it confirms. Held, not charged. The owner's phone stayed quiet. |
+| 5 | 0:54.3 | 1:17.7 | 23.4 s (2.0 words/s) | Nine twelve again. The agent can't take the deposit; it asks. The phone shows what gets signed, not what the AI wrote: keep up to ten dollars, this booking, once. One tap signs it, and the approval id becomes PayPal's request id. One tap, one PayPal call. |
+| 6 | 1:18.3 | 1:35.7 | 17.4 s (1.9 words/s) | Mid-morning. Lucía writes that her son was in the emergency room. A kind assistant would refund on the spot. Ours can't; it asks. And sometimes the owner says yes. Her money, her decision. |
+| 7 | 1:36.3 | 1:51.7 | 15.4 s (1.8 words/s) | Someone pretends to be the owner: nothing reaches her phone, nothing reaches PayPal. The agent reuses an approval: rejected as a replay, and written down like everything else. |
+| 8 | 1:52.3 | 2:13.7 | 21.4 s (1.9 words/s) | One thirty. Sofía cancels, in Spanish, and the agent answers in Spanish. We only held her money, so this is a void, not a refund: it moves zero dollars and releases the hold. Still the owner's call, so still one tap. |
+| 9 | 2:14.3 | 2:29.7 | 15.4 s (1.9 words/s) | Closing time. Three taps. On its own, the agent made five PayPal calls and moved zero dollars. Every attempt, even the refused one, sits in a ledger anyone can check. |
+| 10 | 2:30.3 | 2:37.7 | 7.4 s (1.9 words/s) | Not only a simulation. Capture, void and refund ran against the real PayPal sandbox. |
+| 11 | 2:38.3 | 2:46.7 | 8.4 s (2.0 words/s) | Can it touch my money? It can hold it. Only you can move it. Ask First Pay. |
 
 Never read the approval id, a PayPal id or a date aloud (the screen shows "Mon 16 Nov" and the
 recording day; shot 10 shows the sandbox run's ids and date as text).
