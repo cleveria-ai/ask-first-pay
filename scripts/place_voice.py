@@ -70,6 +70,9 @@ HEAD_BRIDGE_S = 0.03          # ... stepping over gaps this short before the lin
 TAIL_BRIDGE_S = 0.15          # ... and this short after it (the closure before a final "k" or "t")
 ONSET_TOLERANCE_S = 0.08      # in the mix, each line must sit this close to its second (every run checks it)
 SEARCH_S = 0.5                # ... looked for this far either side of it
+MIN_MATCH = 0.5               # ... and be there at all: its loudness curve against the mix's, 1.0 when the same,
+                              # 0.0 when the mix is silent there (measured on stand-in takes: 0.994 or more)
+NOT_LISTENED = "placement not checked (--no-listen): play it and see that each line starts with its shot"
 CUT_QUIET_DB = 50             # ... and the mix must be this far under its voice at the cut that ends each shot
 
 
@@ -139,7 +142,8 @@ def rel(path: Path) -> str:
 
 
 def plain(text: str, args: list[str]) -> str:
-    """ffmpeg's own words, with every absolute path among `args` shown as rel() shows it."""
+    """ffmpeg's or ffprobe's own words, with every absolute path among `args` shown as rel() shows
+    it. For the whole text, before any of it is cut away: half a path would not be found."""
     for arg in sorted((a for a in args if Path(a).is_absolute()), key=len, reverse=True):
         text = text.replace(arg, rel(Path(arg)))
     return text.replace(str(Path.home()), "~")
@@ -150,15 +154,15 @@ def ffmpeg(args: list[str], level: str = "error", text: bool = True) -> subproce
     r = subprocess.run(cmd, capture_output=True, text=text, errors="replace" if text else None)
     if r.returncode:
         err = r.stderr if text else r.stderr.decode(errors="replace")
-        raise Stop(1, plain(f"ffmpeg failed:\n  {' '.join(cmd)}\n{err.strip()[-600:]}", args))
+        raise Stop(1, f"ffmpeg failed:\n  {plain(' '.join(cmd), args)}\n{plain(err, args).strip()[-600:]}")
     return r
 
 
 def duration(path: Path) -> float:
     r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-                        str(path)], capture_output=True, text=True)
+                        str(path)], capture_output=True, text=True, errors="replace")
     if r.returncode or not r.stdout.strip():
-        raise Stop(1, plain(f"cannot read {path}: {r.stderr.strip()[-300:]}", [str(path)]))
+        raise Stop(1, f"cannot read {rel(path)}: {plain(r.stderr, [str(path)]).strip()[-300:]}")
     return float(r.stdout.strip())
 
 
@@ -546,28 +550,31 @@ def misplaced(mixed: Path, rows: list[Window], wavs: list[Path], work: Path) -> 
     the cut that ends each shot, so that no line runs past it. Returns (what is wrong, facts)."""
     heard = peaks(read_pcm(to_wav(mixed, work / "mixed.wav")))
     quiet = percentile([p for p in heard if p] or [0], VOICE_PCT) * 10 ** (-CUT_QUIET_DB / 20)
-    reach, errs, worst = round(SEARCH_S / FRAME_S), [], 0.0
+    reach, errs, worst, weakest = round(SEARCH_S / FRAME_S), [], 0.0, 1.0
     for w, wav in zip(rows, wavs):
         line, at = peaks(read_pcm(wav)), round(w.start / FRAME_S)
         lag = max(range(-reach, reach + 1), key=lambda k: alike(line, heard, at + k))
         there = heard[max(0, at + lag):max(0, at + lag + len(line))]
-        if alike(line, heard, at + lag) <= 0.5 * math.sqrt(sum(a * a for a in line) * sum(b * b for b in there)):
-            errs.append(f"line {w.n} ({w.slug}) is not in the mix at {clock(w.start)}")
+        both = math.sqrt(sum(a * a for a in line) * sum(b * b for b in there))
+        match = alike(line, heard, at + lag) / both if both else 0.0     # 1.0: the same curve, louder or softer
+        if match < MIN_MATCH:
+            errs.append(f"line {w.n} ({w.slug}) is not in the mix at {clock(w.start)} (match {match:.2f})")
         elif abs(lag) * FRAME_S >= ONSET_TOLERANCE_S:
             errs.append(f"line {w.n} ({w.slug}) starts {abs(lag) * FRAME_S:.2f} s {'late' if lag > 0 else 'early'} "
                         f"in the mix (it belongs at {clock(w.start)})")
         else:
-            worst = max(worst, abs(lag) * FRAME_S)
+            worst, weakest = max(worst, abs(lag) * FRAME_S), min(weakest, match)
         cut = w.start + w.length + LEAD_S
         if max(heard[round((cut - 0.15) / FRAME_S):round((cut + 0.15) / FRAME_S)], default=0) > quiet:
             errs.append(f"line {w.n} ({w.slug}) is still sounding at the cut that ends its shot ({clock(cut)})")
     return errs, (f"every line within {ONSET_TOLERANCE_S * 1000:.0f} ms of its second in the mix "
-                  f"(largest offset {worst * 1000:.0f} ms), silence at every cut")
+                  f"(largest offset {worst * 1000:.0f} ms, weakest match {weakest:.2f}), silence at every cut")
 
 
 def place(lines: list[Piece], rows: list[Window], video: Path, out: Path, work: Path, max_tempo: float,
-          tighten: bool, log: list[str]) -> None:
-    """Fit every line to its window, mix, write `out` and check it; the table goes to `log`."""
+          tighten: bool, log: list[str], listen: bool = True) -> None:
+    """Fit every line to its window, mix, write `out` and check it; the table goes to `log`.
+    Without `listen` the mix is not listened to (--no-listen); every other check still runs."""
     total = duration(video)
     if rows[-1].start + rows[-1].length > total + 0.05:
         raise Stop(1, f"{video.name} lasts {total:.1f} s, shorter than the shot list")
@@ -593,11 +600,14 @@ def place(lines: list[Piece], rows: list[Window], video: Path, out: Path, work: 
     try:
         mux(video, track, part, total)
         errs, facts = check(video, part)
-        wrong, placed = misplaced(part, rows, wavs, work)
+        wrong, placed = misplaced(part, rows, wavs, work) if listen else ([], NOT_LISTENED)
         errs += wrong + [f"line {w.n} ({w.slug}) came out {length - w.length:.2f} s longer than its window"
                          for w, length in zip(rows, lengths) if length > w.length + 0.05]
         if errs:
-            raise Stop(1, "\n".join(log + ["the mix failed its check, nothing was written:"] + [f"  {e}" for e in errs]))
+            raise Stop(1, "\n".join(
+                log + ["the mix failed its check, nothing was written:"] + [f"  {e}" for e in errs]
+                + (["if the lines are right to the ear, --no-listen writes the mix without listening to it"]
+                   if wrong else [])))
         part.replace(out)
     finally:
         part.unlink(missing_ok=True)
@@ -640,7 +650,8 @@ def onsets(media: Path, work: Path, db: float = -40.0) -> list[float]:
     return [b for _, b in silences(wav, db, total, 0.2) if b < total - 0.02]
 
 
-def self_test(rows: list[Window], video: Path, out: Path, work: Path, max_tempo: float, log: list[str]) -> None:
+def self_test(rows: list[Window], video: Path, out: Path, work: Path, max_tempo: float, log: list[str],
+              listen: bool = True) -> None:
     """Tone bursts of different lengths through the whole path, then listen to the result: every
     burst must start within ONSET_TOLERANCE_S of its line's second (one burst is too long for its
     window on purpose, so the speed-up runs too)."""
@@ -650,7 +661,7 @@ def self_test(rows: list[Window], video: Path, out: Path, work: Path, max_tempo:
     take = work / "selftest_take.m4a"
     make_test_take(take, bursts)
     lines = from_takes([take], work, len(rows), None, MIN_GAP_S, None, log)
-    place(lines, rows, video, out, work, max_tempo, False, log)
+    place(lines, rows, video, out, work, max_tempo, False, log, listen)
     heard = onsets(out, work)
     offsets = [min((abs(t - w.start) for t in heard), default=math.inf) for w in rows]
     errs = [f"line {w.n}: no burst starts within {ONSET_TOLERANCE_S * 1000:.0f} ms of {clock(w.start)}"
@@ -678,16 +689,16 @@ def run(a: argparse.Namespace, shot_rows: list[tuple]) -> int:
         work = Path(tmp)
         if a.self_test:
             log = [f"{rel(out)}: self-test, tone bursts on {rel(a.video)}"]
-            self_test(rows, a.video, out, work, a.max_tempo, log)
+            self_test(rows, a.video, out, work, a.max_tempo, log, not a.no_listen)
         elif a.take:
             log = [f"{rel(out)}: take {', '.join(t.name for t in a.take)}" + (f", --pick {a.pick}" if a.pick else "")
                    + f" on {rel(a.video)}"]
             lines = from_takes(a.take, work, len(rows), a.silence_db, a.min_gap, a.pick, log)
-            place(lines, rows, a.video, out, work, a.max_tempo, a.tighten, log)
+            place(lines, rows, a.video, out, work, a.max_tempo, a.tighten, log, not a.no_listen)
         else:
             log = [f"{rel(out)}: lines in {a.lines.name}/ on {rel(a.video)}"]
             lines = from_lines(a.lines, work, rows, a.silence_db, a.min_gap, log)
-            place(lines, rows, a.video, out, work, a.max_tempo, a.tighten, log)
+            place(lines, rows, a.video, out, work, a.max_tempo, a.tighten, log, not a.no_listen)
     report = "\n".join(log)
     print(report)
     (out.parent / REPORT_NAME).write_text(report + "\n", encoding="utf-8")
@@ -712,6 +723,9 @@ def main(argv=None, shot_rows: list[tuple] | None = None) -> int:
                     help=f"how much a line that runs long may be sped up (default {MAX_TEMPO})")
     ap.add_argument("--tighten", action="store_true",
                     help=f"shorten the pauses inside a line that runs long (down to {KEEP_PAUSE_S} s) before speeding it up")
+    ap.add_argument("--no-listen", action="store_true",
+                    help="write the mix without listening to it for where each line sits (the other checks still run); "
+                         "for a mix the check refuses but that is right to the ear")
     ap.add_argument("--video", type=Path, default=VIDEO, help="the video to put the voice on")
     ap.add_argument("--out", type=Path, help=f"default {VOICE.name} (self-test: {SELFTEST.name}), next to the video")
     a = ap.parse_args(argv)
