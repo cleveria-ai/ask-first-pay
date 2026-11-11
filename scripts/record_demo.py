@@ -346,12 +346,13 @@ ANSWER_BEATS = [
     (8.95, 0.20, "slot:catch"),
     (9.80, 0.30, "moved:pop"),
     (10.30, 0.40, "say-hold:show"),
-    # 11.5-13.7 s "To move it, it can only ask.": the ask, the owner's phone, the tap, the
-    # single-use pass, one action unlocked
-    (11.50, 0.25, "ask:show"),
-    (11.70, 0.30, "phone:rise whose:show"),
-    (12.20, 0.30, "tap:tap"),
-    (12.30, 0.40, "pass:send-pass"),
+    # The owner signing is the moment the shot is about, so the ask and the phone come in half a
+    # second before the last sentence: the phone is read for a beat before the tap
+    (10.90, 0.25, "ask:show"),
+    (11.15, 0.30, "phone:rise whose:show"),
+    # 11.5-13.7 s "To move it, it can only ask.": the tap, the single-use pass, one action unlocked
+    (12.05, 0.30, "tap:tap"),
+    (12.20, 0.45, "pass:send-pass"),
     (12.72, 0.18, "shackle:open lock-ink:unlocked"),
     (12.72, 0.18, "keep-on:show branch-on:show"),
     (12.72, 0.18, "used:stamp pass-ink:spent"),
