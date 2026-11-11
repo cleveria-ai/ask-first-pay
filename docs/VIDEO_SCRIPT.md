@@ -21,7 +21,7 @@ Nothing in the video claims a live model, and no moving footage is from the sand
 ("Clínica Bahía Imaginaria (fictional)") and the customers (Lucía, Sofía) are fictional. No model
 brand, no grid library caption, no messaging-app name, no browser chrome.
 
-**Every number on screen is the app's own**, from a fresh demo running exactly these shots: $10.00
+**In shots 1-9 and 11 every number on screen is the app's own**, from a fresh demo running exactly these shots: $10.00
 deposits, CAP-0003, and in the Today panel 5 PayPal calls on its own and $0.00 moved, 3 taps,
 $10.00 kept, $10.00 given back, $10.00 released, 1 refused; ledger 4 of 4 rows chained. Shot 10's
 numbers are the sandbox run's: 5 of 5 rows chained, and the ids PayPal returned, copied from
@@ -55,7 +55,7 @@ step.
 | Cold open on the 9:12 card (G1) | Shot 1; the same card is earned in shot 5 |
 | "PayPal" said in the first 15 s (G2) | Shot 1, at about 0:06 |
 | Time-of-day lower thirds (G3) | 9:12 a.m., 11:48 p.m., 10:05 a.m., 1:30 p.m., Closing; times only, never weekdays |
-| Second caption track naming the PayPal calls (G4) | Shots 4-9, at most six words each (SHOTLIST, second table) |
+| Second caption track naming the PayPal calls (G4) | Shots 4-9, at most six words each (SHOTLIST, second table); shot 10's caption lists the three sandbox ids |
 | One Spanish customer line with English subtitles (G5) | Shot 8 |
 | Approval id = PayPal-Request-Id (G7) | Shot 5: owner card, then the ledger detail with the capture id PayPal returned |
 | Void "moves $0.00" (G8) | Shot 8: the card's own headline |
