@@ -40,14 +40,17 @@ each one starts. It never touches `ask_first_pay_voice.mp4`.
 4. **A line went wrong?** Keep recording: stay silent two seconds, say the whole line again, and
    go on to the next. You sort it out afterwards with `--pick` (below).
 5. After the last line wait two seconds and stop. That is one take of about three minutes.
+   Anything else said on it ("ready?", "done") counts as a piece: leave it out with `--pick`.
 6. **To the computer.** Send the recording to yourself as a file (AirDrop, email, a cloud drive
    or a USB cable; not as a voice message in a chat, which gets compressed again) and save it as
    `docs/video/out/voice.m4a`. That folder is git-ignored, so recordings never enter the
    repository. Any format ffmpeg reads will do (m4a, mp3, wav, ogg, even a video): use the
    file's real name in the command.
 
-Lines 3 and 10 have the least room (13.4 s and 7.4 s: about 2.7 words a second), then 2, 11 and
-1. Read those briskly; the rest fit at a calm pace.
+Lines 3 and 10 have the least room (13.4 s and 7.4 s: about 2.7 words a second, a newsreader's
+pace), then 2, 11 and 1. Read those briskly and do not linger at their full stops; the rest fit
+at a calm pace. If the command still answers that line 10 does not fit, `--tighten --max-tempo
+1.25` is the quick way out (see the table below).
 
 ### What the command answers
 
@@ -55,7 +58,7 @@ Lines 3 and 10 have the least room (13.4 s and 7.4 s: about 2.7 words a second),
 |---|---|---|
 | `wrote docs/video/out/ask_first_pay_voice.mp4 and ...` | Done and checked. | Play it once, start to finish, with sound. |
 | `line 2 (founder) ran long: sped up x1.045` | The line was a little longer than its shot and was sped up to fit (at most 12 %, pitch unchanged). | Nothing. |
-| `found 12 pieces; the video has 11 lines`, then a table of the pieces (number, start, length); exit code 2 | A line was said twice, or a pause was too long or too short. Nothing was written. | Said twice: name the pieces to use, in the order of the lines. `--pick 1,2,4,5,6,7,8,9,10,11,12` leaves piece 3 out. A line that broke in two at a long pause: `--pick 1,2+3,4,...` joins pieces 2 and 3. Two lines that ran together: split at shorter pauses with `--min-gap 0.7` (default 1.0; the message names a value when one gives exactly eleven pieces). |
+| `found 12 pieces; the video has 11 lines`, then a table of the pieces (number, start, length); exit code 2 | A line was said twice, or a pause was too long or too short. Nothing was written. | Said twice: name the pieces to use, in the order of the lines. `--pick 1,2,4,5,6,7,8,9,10,11,12` leaves piece 3 out. A line that broke in two at a long pause: `--pick 1,2+3,4,...` joins pieces 2 and 3. Two lines that ran together: split at shorter pauses with `--min-gap 0.8` (default 1.2; the message names a value when one gives exactly eleven pieces). |
 | `line 10 (sandbox) does not fit: ... still 0.92 s too long`; exit code 3 | That line is longer than its shot even at the top speed. Nothing was written: a line is never cut. | Mildest first. `--tighten` shortens the pauses inside the lines that run long (never under 0.3 s; no word is touched). `--max-tempo 1.2` allows more speed (the message names the value that fits every line; up to about 1.25 a voice still sounds natural). Or say only those lines again, brisker, into a second recording and pick its pieces: `--take docs/video/out/voice.m4a docs/video/out/fix.m4a --pick 1,2,12,4,5,6,7,8,9,13,11` (the second recording's pieces are numbered after the first's). |
 
 The first line of the output says what the command took for silence, for example `under -41.5 dB

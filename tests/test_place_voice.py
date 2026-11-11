@@ -97,8 +97,8 @@ def test_place_voice_fit_speeds_up_to_the_cap_and_only_tightens_pauses_when_aske
 def test_place_voice_cuts_a_take_at_its_pauses(tmp_path):
     take = tmp_path / "take.m4a"
     starts = pv.make_test_take(take, [2.0, 3.0, 1.5], gaps=[1.3, 2.6, 1.0])
-    found = pv.find(pv.to_wav(take, tmp_path / "take.wav"), take.name, None, 1.0)
-    assert len(found.pieces) == 3 and found.auto
+    found = pv.find(pv.to_wav(take, tmp_path / "take.wav"), take.name, None, pv.MIN_GAP_S)
+    assert len(found.pieces) == 3 and found.auto                 # a 1.3 s pause is enough
     assert found.noise + 6 < found.db < found.voice - 6          # the threshold sits between room and voice
     for piece, start, length in zip(found.pieces, starts, [2.0, 3.0, 1.5]):
         assert piece.start == pytest.approx(start - pv.PAD_S, abs=0.03)       # 50 ms of silence kept at the head

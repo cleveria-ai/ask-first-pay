@@ -46,7 +46,8 @@ LEAD_S = 0.3                  # a line starts this long into its shot and ends t
 PAD_S = 0.05                  # silence kept at the head and tail of a line
 FADE_S = 0.01
 MIN_PIECE_S = 0.6             # shorter than this between two pauses is a click or a cough, not a line
-MIN_GAP_S = 1.0               # a pause this long splits the take (the guide asks for two seconds)
+MIN_GAP_S = 1.2               # a pause this long splits the take: the guide asks for two seconds between
+                              # lines and under one inside a line, and soft word ends make a pause measure longer
 MAX_TEMPO = 1.12
 KEEP_PAUSE_S = 0.3            # --tighten never leaves a pause inside a line shorter than this
 RATE = 48000
