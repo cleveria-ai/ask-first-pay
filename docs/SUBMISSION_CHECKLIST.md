@@ -24,15 +24,15 @@ hackathon-specific questions and answer them from `docs/DEVPOST.md`.
 |---|---|
 | Project name | Ask First Pay |
 | Elevator pitch / tagline | "Can it touch my money?" An AI front desk for clinics that can hold a PayPal deposit on its own. Only the owner's tap moves it. |
-| About the project (story) | Paste `docs/DEVPOST.md` from "Inspiration" to "What's next" (nine sections, including "How it differs" and "Built with AG Grid"). Founder claims are default wording (`docs/FOUNDER_FACTS.md`); change them there first if the founder rewrites any. |
+| About the project (story) | Paste `docs/DEVPOST.md` from "Inspiration" to "Prior work" (eleven sections, including "How it differs", "Proven on the real PayPal sandbox" and "Built with AG Grid"). Founder claims are default wording (`docs/FOUNDER_FACTS.md`); change them there first if the founder rewrites any. |
 | AG Grid sponsor prize | Mention it: the ledger and the owner's mandate list are AG Grid Community grids; paste *Built with AG Grid* from `docs/DEVPOST.md` (features named there). |
 | Built with | python, fastapi, jinja, httpx, paypal-orders-v2, paypal-payments-v2, anthropic-claude, ed25519, webcrypto, ag-grid |
 | "Try it out" links | Repository URL (once public): https://github.com/cleveria-ai/ask-first-pay — OWNER confirms |
 | Video demo link | OWNER: the public YouTube URL |
-| Image gallery / thumbnail | In this order: `docs/screenshots/01-chat-booking.png`, `02-owner-approval.png`, `03-ledger-replay.png`, `04-cancellation-voided.png`, `05-owner-mobile.png` (all PNG; desktop 1280x720, phone 375x812; `06`-`08` optional). Captions: the table in `docs/DEVPOST.md` → *Screenshots*. Thumbnail (3:2): crop `02-owner-approval.png` (OWNER). Regenerate: `.venv/bin/python scripts/screenshots.py --dark`. |
-| PayPal APIs / products used | Orders v2 (create with intent AUTHORIZE, authorize), Payments v2 (capture, reauthorize, void, refund, get), OAuth 2.0 client credentials; sandbox |
+| Image gallery / thumbnail | In this order: `docs/screenshots/02-owner-approval.png`, `12-sandbox-ledger.png` (real PayPal sandbox ids), `12-sandbox-chat-held.png` (the chip reads "PayPal sandbox"), `01-chat-booking.png`, `03-ledger-replay.png`, `04-cancellation-voided.png`, `05-owner-mobile.png`, `10-owner-today-mobile.png` (all PNG; desktop 1280x720, phone 375x812; the rest optional). Captions: the table in `docs/DEVPOST.md` → *Screenshots*. Thumbnail (3:2): crop `02-owner-approval.png` (OWNER). Regenerate: `.venv/bin/python scripts/screenshots.py --dark`. |
+| PayPal APIs / products used | Orders v2 (create with intent AUTHORIZE, authorize), Payments v2 (capture, reauthorize, void, refund, get), OAuth 2.0 client credentials; sandbox. Run for real on 2026-11-11: `docs/SANDBOX_RUN.md`, `docs/SANDBOX_UI_RUN.md` |
 | AI used | Anthropic Claude via the Messages API with tool use (model id from `ASK_FIRST_MODEL`, default `claude-sonnet-5-5`); offline scripted model when no key is set |
-| Prior work / existing code disclosure | `libs/ask-first-mandate` created 2026-10-17 (inside the submission period) for our "Ask First for Alexa+" entry, reused under Apache-2.0; its README declares what it ports from an earlier public repository. Everything under `src/ask_first_pay/` is new. AG Grid Community vendored (MIT). |
+| Prior work / existing code disclosure | Paste *Prior work* from `docs/DEVPOST.md`: `libs/ask-first-mandate` created 2026-10-17 (inside the submission period) for our "Ask First for Alexa+" entry, reused under Apache-2.0; its identity signing and ledger were ported from our earlier public repository `soyharso/agent-identity-firma` (August 2026). Everything under `src/ask_first_pay/` is new. AG Grid Community vendored (MIT). |
 | Testing instructions for judges | "Run it in 2 minutes" in `README.md`: `scripts/demo.sh`, no keys. |
 | License | Apache-2.0 |
 | Team members | OWNER (invite on Devpost) |
