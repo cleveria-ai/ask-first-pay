@@ -142,7 +142,13 @@ so anyone can run them without keys; the video adds one still of the sandbox led
 The owner's mandate list (`/owner`) and the ledger (`/ledger`) are AG Grid Community 36.3.0
 grids, vendored and served locally (`src/ask_first_pay/demo/static/vendor/`, MIT license file
 alongside, no CDN). Setup in `src/ask_first_pay/demo/static/grid.js`; every feature used is in
-the free Community edition:
+the free Community edition.
+
+Why a grid: the product's promise is that the owner can check it. At closing she asks "what did
+the AI do with my money today, and what did it try that I never approved?" The grid answers in
+two taps: filter to *Rejected*, tap the row, read what was attempted and which approval it tried
+to reuse. In the sandbox run the same grid shows PayPal's own ids next to each approval
+(`docs/screenshots/12-sandbox-ledger.png`).
 
 - **Sorting** on every column (the ledger opens newest first; shift-click for multi-column).
 - **Filtering**: text and number column filters, **external filters** wired to the
