@@ -30,7 +30,9 @@ def test_the_record_holds_a_complete_real_run():
     assert runs, "no run with capture COMPLETED, same capture id on retry, gate replay refused and void VOIDED"
     run = runs[-1]
     auth = rows(run, "authorization")[0].split()[0]
-    assert run.count(f"`POST /v2/payments/authorizations/{auth}/capture` 201") == 2, "capture and its retry"
+    # the capture, then its retry: PayPal answers 201 to the first and 200 or 201 to the replay
+    statuses = re.findall(rf"`POST /v2/payments/authorizations/{auth}/capture` (\d{{3}})", run)
+    assert len(statuses) == 2 and statuses[0] == "201" and statuses[1] in ("200", "201"), statuses
     assert re.search(r"`POST /v2/payments/authorizations/[0-9A-Z]{17}/void` 204", run)
 
 
