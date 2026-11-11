@@ -326,34 +326,35 @@ def book_and_hold(ctx, base: str, message: str, simulated: bool) -> None:
 # most three rows overlap, and the last one ends ANSWER_STILL_S before the shot does
 # (tests/test_video_assets.py checks all of this).
 ANSWER_BEATS = [
-    # 0.3-1.9 s "Deposits stop no-shows.": who is involved
+    # 0.3-2.1 s "Deposits stop no-shows.": who is involved
     (0.00, 0.45, "customer:rise"),
     (0.45, 0.30, "to-agent:show"),
     (0.60, 0.45, "agent:rise"),
     (1.05, 0.30, "to-paypal:show"),
     (1.20, 0.45, "paypal:rise"),
-    # 1.9-7.1 s "But every day someone decides whose deposit to keep, release or give back.":
-    # the three ways the money can move, switched off, each as it is said; then locked
-    (2.20, 0.40, "decides:show"),
-    (4.60, 0.35, "act-keep:show"),
-    (5.30, 0.35, "act-release:show"),
-    (6.00, 0.35, "act-back:show"),
-    (6.60, 0.35, "lock:pop gate:show"),
-    # 7.1-11.7 s "Our agent can hold money on its own, because a hold moves nothing."
-    (7.30, 0.40, "own:show"),
-    (7.50, 1.80, "hold:send-hold"),
-    (9.30, 0.20, "slot:catch"),
-    (9.50, 0.30, "moved:pop"),
-    (9.70, 0.40, "say-hold:show"),
-    # the same sentence is still on screen: the way round the lock is laid out
-    (10.60, 0.35, "ask:show"),
-    (11.00, 0.40, "phone:rise whose:show"),
-    # 11.7-13.7 s "To move it, it can only ask.": the tap, the single-use pass, one action unlocked
-    (11.90, 0.40, "tap:tap"),
-    (12.00, 0.60, "pass:send-pass"),
-    (12.70, 0.20, "shackle:open lock-ink:unlocked"),
-    (12.70, 0.20, "keep-on:show branch-on:show"),
-    (12.70, 0.20, "used:stamp pass-ink:spent"),
+    # 2.1-6.7 s "But every day someone decides: keep, release or give back.": the three ways
+    # the money can move, switched off, each as it is said; then locked
+    (2.30, 0.40, "decides:show"),
+    (4.50, 0.35, "act-keep:show"),
+    (5.10, 0.35, "act-release:show"),
+    (5.70, 0.35, "act-back:show"),
+    (6.30, 0.35, "lock:pop gate:show"),
+    # 6.8-11.4 s "Our agent can hold money on its own: a hold moves nothing." The counter comes
+    # with the second half, "a hold moves nothing" (from about 9.7 s)
+    (6.95, 0.40, "own:show"),
+    (7.15, 1.80, "hold:send-hold"),
+    (8.95, 0.20, "slot:catch"),
+    (9.80, 0.30, "moved:pop"),
+    (10.30, 0.40, "say-hold:show"),
+    # 11.5-13.7 s "To move it, it can only ask.": the ask, the owner's phone, the tap, the
+    # single-use pass, one action unlocked
+    (11.50, 0.25, "ask:show"),
+    (11.70, 0.30, "phone:rise whose:show"),
+    (12.20, 0.30, "tap:tap"),
+    (12.30, 0.40, "pass:send-pass"),
+    (12.72, 0.18, "shackle:open lock-ink:unlocked"),
+    (12.72, 0.18, "keep-on:show branch-on:show"),
+    (12.72, 0.18, "used:stamp pass-ink:spent"),
     (12.90, 0.05, "say-move:show"),              # short: the recorder's clock is good to +/-0.05 s
 ]
 ANSWER_STILL_S = 1                               # the finished diagram stays this long, unmoving
