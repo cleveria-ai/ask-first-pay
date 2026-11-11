@@ -321,35 +321,42 @@ def book_and_hold(ctx, base: str, message: str, simulated: bool) -> None:
 # Shot 3 is a diagram that builds itself while the voice explains it. Each row is one thing the
 # viewer sees change: (starts at s, lasts s, "class:keyframes ..."), counted from the moment the
 # card is drawn, which is the start of the shot. Fixed delays only: nothing waits for the network,
-# a timer in the page or chance, so every recording plays the same. At most three rows overlap, and
-# the last one ends ANSWER_STILL_S before the shot does (tests/test_video_assets.py).
+# a timer in the page or chance, so every recording plays the same. The rows follow the burned-in
+# narration (docs/video/subtitles.srt): each thing appears while its sentence is on screen. At
+# most three rows overlap, and the last one ends ANSWER_STILL_S before the shot does
+# (tests/test_video_assets.py checks all of this).
 ANSWER_BEATS = [
-    # 0-3 s: who is involved, and the three ways money can move, switched off
-    (0.15, 0.45, "customer:rise"),
-    (0.60, 0.30, "to-agent:show"),
-    (0.70, 0.45, "agent:rise"),
-    (1.20, 0.35, "to-paypal:show"),
-    (1.40, 0.45, "paypal:rise"),
-    (2.00, 0.35, "act-keep:show"),
-    (2.20, 0.35, "act-release:show"),
-    (2.40, 0.35, "act-back:show"),
-    # 3-8 s: the agent holds on its own, and a hold moves nothing
-    (3.20, 2.40, "hold:send-hold"),
-    (5.60, 0.40, "slot:catch"),
-    (6.10, 0.40, "own:show"),
-    (7.00, 0.40, "moved:pop"),
-    # 8-12 s: to move it, it asks; the owner's tap signs a single-use pass that opens one action
-    (8.00, 0.35, "lock:pop gate:show"),
-    (8.40, 0.35, "ask:show"),
-    (8.80, 0.40, "phone:rise whose:show"),
-    (9.60, 0.50, "tap:tap"),
-    (10.10, 0.80, "pass:send-pass"),
-    (10.90, 0.30, "shackle:open lock-ink:unlocked"),
-    (10.90, 0.30, "keep-on:show branch-on:show"),
-    (11.25, 0.30, "used:stamp pass-ink:spent"),
-    (11.50, 0.45, "answer:show"),
+    # 0.3-1.9 s "Deposits stop no-shows.": who is involved
+    (0.00, 0.45, "customer:rise"),
+    (0.45, 0.30, "to-agent:show"),
+    (0.60, 0.45, "agent:rise"),
+    (1.05, 0.30, "to-paypal:show"),
+    (1.20, 0.45, "paypal:rise"),
+    # 1.9-7.1 s "But every day someone decides whose deposit to keep, release or give back.":
+    # the three ways the money can move, switched off, each as it is said; then locked
+    (2.20, 0.40, "decides:show"),
+    (4.60, 0.35, "act-keep:show"),
+    (5.30, 0.35, "act-release:show"),
+    (6.00, 0.35, "act-back:show"),
+    (6.60, 0.35, "lock:pop gate:show"),
+    # 7.1-11.7 s "Our agent can hold money on its own, because a hold moves nothing."
+    (7.30, 0.40, "own:show"),
+    (7.50, 1.80, "hold:send-hold"),
+    (9.30, 0.20, "slot:catch"),
+    (9.50, 0.30, "moved:pop"),
+    (9.70, 0.40, "say-hold:show"),
+    # the same sentence is still on screen: the way round the lock is laid out
+    (10.60, 0.35, "ask:show"),
+    (11.00, 0.40, "phone:rise whose:show"),
+    # 11.7-13.7 s "To move it, it can only ask.": the tap, the single-use pass, one action unlocked
+    (11.90, 0.40, "tap:tap"),
+    (12.00, 0.60, "pass:send-pass"),
+    (12.70, 0.20, "shackle:open lock-ink:unlocked"),
+    (12.70, 0.20, "keep-on:show branch-on:show"),
+    (12.70, 0.20, "used:stamp pass-ink:spent"),
+    (12.90, 0.05, "say-move:show"),              # short: the recorder's clock is good to +/-0.05 s
 ]
-ANSWER_STILL_S = 2                               # the finished diagram stays this long, unmoving
+ANSWER_STILL_S = 1                               # the finished diagram stays this long, unmoving
 
 # The diagram is laid out by hand on the card's 1280x628 (the stage minus the narration band), in
 # the stage's and the app's own colours and fonts; no text under 24 px. Pieces marked `h` start
@@ -371,6 +378,7 @@ ANSWER_CSS = """
             justify-content:center;border:2px solid #354152;border-radius:26px;color:#9fb3c8;
             background:#0f1720;font-size:26px}
  .flow .act.keep-on{color:#e8eef5;border-color:#7fdca5;background:#0f2e1e;font-weight:600}
+ .flow .decides{left:964px;top:178px}
  .flow .hold,.flow .moved,.flow .pass,.flow .used{height:44px;display:flex;align-items:center;
             justify-content:center;border-radius:8px;font-weight:600;white-space:nowrap}
  .flow .hold{left:300px;top:86px;width:184px;background:#ffd84d;color:#111;
@@ -426,6 +434,7 @@ ANSWER_HTML = """<div class=flow>
  <div class="node h customer" style="left:24px;top:70px;width:176px">Customer</div>
  <div class="h paypal" style="left:944px;top:30px;width:312px;height:440px"><b>PayPal</b>
   <div class=slot></div></div>
+ <div class="h decides">every day,<br>someone decides:</div>
  <div class="act h act-keep" style="top:270px">keep</div>
  <div class="act h keep-on" style="top:270px">keep</div>
  <div class="act h act-release" style="top:338px">release</div>
@@ -451,7 +460,8 @@ ANSWER_HTML = """<div class=flow>
  <div class="h whose">Owner's phone</div>
  <div class="h tap"></div>
  <div class="h used">used</div>
- <div class="h answer">It can hold it. Only you can move it.</div>
+ <div class=answer><span class="h say-hold">It can hold it.</span>
+  <span class="h say-move">Only you can move it.</span></div>
 </div>"""
 
 

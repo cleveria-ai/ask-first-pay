@@ -83,18 +83,20 @@ def test_the_sandbox_still_says_what_it_is_and_shows_only_ids_from_the_record():
 def test_the_answer_diagram_runs_on_a_fixed_timeline_ends_still_and_stays_readable():
     """Shot 3 explains the mechanism as a diagram that builds itself: every change is a CSS
     animation with a fixed delay that keeps its end state, at most three things change at once,
-    the last change ends two seconds before the shot does, and nothing is written under 24 px."""
+    the last change ends a second before the shot does, and nothing is written under 24 px."""
     import re
     rec = load("record_demo")
     seconds = next(s for n, _, s, _ in rec.SHOTS if n == 3)
-    beats, card = rec.ANSWER_BEATS, rec.answer_card()
-    starts = [at for at, _, _ in beats]
+    card = rec.answer_card()
+    ms = [(round(at * 1000), round(lasts * 1000)) for at, lasts, _ in rec.ANSWER_BEATS]
+    starts = [at for at, _ in ms]
     assert starts == sorted(starts) and starts[0] >= 0
-    assert max(at + lasts for at, lasts, _ in beats) <= seconds - rec.ANSWER_STILL_S
-    assert max(sum(a <= at < a + d for a, d, _ in beats) for at, _, _ in beats) <= 3
+    assert rec.ANSWER_STILL_S == 1
+    assert max(at + lasts for at, lasts in ms) <= (seconds - rec.ANSWER_STILL_S) * 1000
+    assert max(sum(a <= at < a + d for a, d in ms) for at in starts) <= 3
     classes = {c for quoted, bare in re.findall(r'class=(?:"([^"]*)"|([\w-]+))', rec.ANSWER_HTML)
                for c in (quoted or bare).split()}
-    for at, lasts, what in beats:
+    for at, lasts, what in rec.ANSWER_BEATS:
         for cls, keyframes in (piece.split(":") for piece in what.split()):
             assert f".flow .{cls}{{animation:{keyframes} {lasts}s ease {at}s forwards}}" in card
             assert f"@keyframes {keyframes}{{" in rec.ANSWER_CSS and cls in classes, (cls, keyframes)
@@ -104,9 +106,33 @@ def test_the_answer_diagram_runs_on_a_fixed_timeline_ends_still_and_stays_readab
     assert "font:" not in rec.ANSWER_CSS and "body.card-only #wrap{visibility:hidden}" in rec.STAGE
     for text in ("Customer", "AI front desk", "PayPal", "keep", "release", "give back", "HOLD $10.00",
                  "on its own:", "books · creates the order", "holds the deposit", "$0.00 moved", "ask",
-                 "Owner's phone", "Keep up to", "Approve", "single-use", "used",
-                 "It can hold it. Only you can move it."):
+                 "Owner's phone", "Keep up to", "Approve", "single-use", "used", "every day,",
+                 "someone decides:", "It can hold it.", "Only you can move it."):
         assert text in rec.ANSWER_HTML, text
+
+
+def test_the_answer_diagram_follows_the_burned_in_narration():
+    """Each thing in shot 3 appears while the sentence about it is on screen (a first cut ran about
+    four seconds ahead of the subtitles): the three pieces with "Deposits stop no-shows.", the
+    three actions and their lock with "... keep, release or give back.", the hold with "Our agent
+    can hold money on its own ...", and the tap, the pass and the open lock with "... only ask."."""
+    rec, check = load("record_demo"), load("check_video_assets")
+    t0 = sum(s for n, _, s, _ in rec.SHOTS if n < 3)
+    seconds = next(s for n, _, s, _ in rec.SHOTS if n == 3)
+    cues = [(a - t0, b - t0, text) for a, b, text in check.parse_srt(check.SRT.read_text(encoding="utf-8"))
+            if t0 <= a < t0 + seconds]
+    assert [text.split()[0] for _, _, text in cues] == ["Deposits", "But", "Our", "To"]
+    at = {piece.split(":")[0]: start for start, _, what in rec.ANSWER_BEATS for piece in what.split()}
+    shown_with = [("customer", "agent", "paypal"),
+                  ("decides", "act-keep", "act-release", "act-back", "lock"),
+                  ("own", "hold", "moved", "say-hold"),
+                  ("tap", "pass", "shackle", "keep-on", "used", "say-move")]
+    for (a, b, text), pieces in zip(cues, shown_with):
+        first = 0 if text.startswith("Deposits") else a      # the pieces may lead the first words
+        for cls in pieces:
+            assert first <= at[cls] <= b, (cls, at[cls], text)
+    assert at["act-keep"] < at["act-release"] < at["act-back"] < at["lock"]     # in the order said
+    assert at["say-hold"] < at["ask"] < at["tap"] < at["say-move"]
 
 
 def test_no_third_party_marks_in_what_the_recorder_draws():
