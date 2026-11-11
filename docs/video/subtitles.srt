@@ -22,21 +22,21 @@ The first thing owners ask
 is: can it touch my money?
 
 6
-00:00:20,300 --> 00:00:21,864
+00:00:20,300 --> 00:00:22,096
 Deposits stop no-shows.
 
 7
-00:00:21,914 --> 00:00:27,055
-But every day someone decides whose
-deposit to keep, release or give back.
+00:00:22,146 --> 00:00:26,749
+But every day someone decides:
+keep, release or give back.
 
 8
-00:00:27,105 --> 00:00:31,686
-Our agent can hold money on its
-own, because a hold moves nothing.
+00:00:26,799 --> 00:00:31,403
+Our agent can hold money on
+its own: a hold moves nothing.
 
 9
-00:00:31,736 --> 00:00:33,650
+00:00:31,453 --> 00:00:33,650
 To move it, it can only ask.
 
 10

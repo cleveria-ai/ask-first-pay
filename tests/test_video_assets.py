@@ -115,7 +115,9 @@ def test_the_answer_diagram_follows_the_burned_in_narration():
     """Each thing in shot 3 appears while the sentence about it is on screen (a first cut ran about
     four seconds ahead of the subtitles): the three pieces with "Deposits stop no-shows.", the
     three actions and their lock with "... keep, release or give back.", the hold with "Our agent
-    can hold money on its own ...", and the tap, the pass and the open lock with "... only ask."."""
+    can hold money on its own ..." ("$0.00 moved" in its second half, "a hold moves nothing"), and
+    the tap, the pass and the open lock with "To move it, it can only ask.". The ask and the
+    owner's phone may lead that last sentence by up to 0.6 s, so the phone is read before the tap."""
     rec, check = load("record_demo"), load("check_video_assets")
     t0 = sum(s for n, _, s, _ in rec.SHOTS if n < 3)
     seconds = next(s for n, _, s, _ in rec.SHOTS if n == 3)
@@ -131,8 +133,13 @@ def test_the_answer_diagram_follows_the_burned_in_narration():
         first = 0 if text.startswith("Deposits") else a      # the pieces may lead the first words
         for cls in pieces:
             assert first <= at[cls] <= b, (cls, at[cls], text)
+    ask_from, ask_to, _ = cues[3]
+    for cls in ("ask", "phone"):
+        assert ask_from - 0.6 <= at[cls] <= ask_to, (cls, at[cls])
     assert at["act-keep"] < at["act-release"] < at["act-back"] < at["lock"]     # in the order said
-    assert at["say-hold"] < at["ask"] < at["tap"] < at["say-move"]
+    hold_from, hold_to, _ = cues[2]
+    assert at["hold"] < (hold_from + hold_to) / 2 <= at["moved"] < at["say-hold"]
+    assert at["ask"] < at["phone"] < at["tap"] < at["pass"] < at["shackle"] <= at["say-move"]
 
 
 def test_no_third_party_marks_in_what_the_recorder_draws():
