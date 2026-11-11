@@ -8,6 +8,11 @@ the agent can only **ask**: the owner taps Approve once on their phone, which si
 for that action, that PayPal resource and that amount. Replays, overreach and expired mandates are
 rejected in plain sight, and every attempt lands in a hash-chained ledger anyone can verify.
 
+**Run against the real PayPal sandbox on 2026-11-11:** one owner approval became exactly one
+capture (`998786236C479363B`, `COMPLETED`); the retry with the same `PayPal-Request-Id` returned
+that same capture, so nothing was charged twice; a cancellation became a void
+(`63A502184W936794R`, `VOIDED`). Ids, HTTP methods, paths and statuses: `docs/SANDBOX_RUN.md`.
+
 **Who it is for:** small appointment businesses (clinics, salons, physiotherapists, tutors) that
 lose money to no-shows, take deposits to stop it, and want an AI front desk without handing it
 the till.
@@ -155,7 +160,9 @@ the free Community edition:
    their approval links; after approving both, `python scripts/sandbox_run.py --continue <first>
    --void-order <second>` authorizes, captures through an approved mandate, retries the capture
    with the same `PayPal-Request-Id`, voids the second hold, and appends ids and HTTP statuses
-   (never tokens) to `docs/SANDBOX_RUN.md`.
+   (never tokens) to `docs/SANDBOX_RUN.md`. That file holds our run of 2026-11-11: orders
+   `5WF1406594379682R` (captured once, same capture id on the retry) and `4BB42998PV419681V`
+   (voided).
 
 The adapter (`src/ask_first_pay/paypal/`) talks only to `api-m.sandbox.paypal.com` unless it is
 built with `environment="production", allow_production=True`. The sandbox path is covered by
@@ -192,8 +199,9 @@ customer typing "the owner approved" is rejected by the gate and written to the 
   checked against the old server key.
 - Webhook verification against PayPal's real certificate has not been run (no keys in this
   repository); the offline tests use a local simulator with its own certificate.
-- Claude and the PayPal sandbox paths are covered by offline tests with recorded-shape responses;
-  a live run needs your own keys (below).
+- The PayPal sandbox path ran for real once (authorize, capture, idempotent retry, void:
+  `docs/SANDBOX_RUN.md`); refund and reauthorize, and the Claude path, are covered by offline
+  tests with recorded-shape responses. A live run needs your own keys (above).
 
 ## Prior work
 

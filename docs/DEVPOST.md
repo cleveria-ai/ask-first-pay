@@ -66,11 +66,23 @@ list, its npm and PyPI pages as recorded in `docs/agent_toolkit_decision.md` (20
 The two sides fit together: a shopper's agent can pay with an AP2 or ACP mandate, and the
 clinic's agent still cannot keep, release or refund that money without the owner's own mandate.
 
-**Live sandbox:** the adapter is written against the PayPal sandbox and ready to run there:
-`scripts/sandbox_run.py` creates the orders, then (after a sandbox buyer approves) authorizes,
-captures through an approved mandate, retries with the same `PayPal-Request-Id`, voids a second
-hold, and appends the ids and HTTP statuses (never tokens) to `docs/SANDBOX_RUN.md`. The demo and
-the video run offline by default (scripted model, simulated PayPal) and say so on screen.
+## Proven on the real PayPal sandbox
+
+On 2026-11-11 the same gate and the same adapter ran against the real PayPal sandbox.
+`scripts/sandbox_run.py` created two USD 10.00 orders with intent AUTHORIZE, a sandbox buyer
+approved them in the browser, and then:
+
+| Step | What PayPal answered |
+|---|---|
+| No-show: authorize order `5WF1406594379682R`, then capture through an owner-approved mandate | capture `998786236C479363B`, `COMPLETED` (HTTP 201) |
+| The same capture sent again with the same `PayPal-Request-Id` (the mandate's id) | the **same** capture `998786236C479363B` (HTTP 200): PayPal did not charge twice |
+| The agent replays the spent mandate at our gate | refused (`replay`) before any PayPal call |
+| Cancellation: authorize order `4BB42998PV419681V`, then void through its own mandate | authorization `63A502184W936794R`, `VOIDED` (HTTP 204): nothing charged |
+
+The full record, with every HTTP call's method, path and status (never tokens or headers), is
+`docs/SANDBOX_RUN.md`, and `tests/test_sandbox_evidence.py` keeps this table and that record in
+step. The demo and the video run offline by default (scripted model, simulated PayPal) and say so
+on screen, so anyone can run them without keys.
 
 ## How we built it
 
@@ -146,6 +158,9 @@ the free Community edition:
 
 ## Accomplishments that we're proud of
 
+- It works against PayPal for real: one owner approval became exactly one sandbox capture
+  (`998786236C479363B`), the retry with the same `PayPal-Request-Id` returned that same capture,
+  and a cancellation became a void (`63A502184W936794R`). See *Proven on the real PayPal sandbox*.
 - The agent cannot move money on its own through any tool it holds: the tests use a spy provider
   and an injected "owner approved" message and assert that nothing moved. A decline is final and
   a second approval is refused.
@@ -155,7 +170,7 @@ the free Community edition:
   PayPal sandbox by setting environment variables. The video is recorded from that offline demo
   (scripted model, simulated PayPal) and says so on screen; the business and customers are
   fictional, and the video shows no brand but PayPal's.
-- 537 automated tests (2026-11-10), all offline, including the attacks listed under "Try to break it"
+- 545 automated tests (2026-11-11), all offline, including the attacks listed under "Try to break it"
   in the README.
 
 ## What we learned
