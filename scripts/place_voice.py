@@ -9,10 +9,13 @@
 pause between lines; it is cut at the pauses. `--lines` is a folder with one file per line. Either
 way each line loses the silence at its head and tail, starts 0.3 s after its shot does (the shots
 and their seconds are the SHOTS of scripts/record_demo.py, as in check_video_assets.py) and must
-end 0.3 s before the shot ends: a line that runs long is sped up, up to --max-tempo, and never
-cut. The mix is levelled to -16 LUFS and written beside a copy of the picture, which is not
-re-encoded. The output is checked before the script says it is done; a table goes to
-voice_report.txt next to it.
+end 0.3 s before the shot ends: a line that runs long is sped up, up to --max-tempo (x1.12), and
+never cut. The mix is levelled to -16 LUFS and written beside a copy of the picture, which is not
+re-encoded. The output is checked before the script says it is done: its length, its picture,
+and, by listening to the mix, that every line sits within 80 ms of its second and is over
+before its shot's cut. A table goes to voice_report.txt next to it; sounds too short to be a
+line (under 0.6 s) are left out and listed there. Messages and the report show file names or
+paths inside the repository, never absolute ones.
 
 Exit codes: 0 written and checked; 1 a file is missing or the output failed its check; 2 the
 recording did not give exactly one piece per shot (the table says what was found and what to
@@ -65,7 +68,9 @@ EDGE_OVER_NOISE_DB = 6        # a line's edges reach out to where the sound sink
 EDGE_REACH_S = 0.6            # ... at most this far,
 HEAD_BRIDGE_S = 0.03          # ... stepping over gaps this short before the line
 TAIL_BRIDGE_S = 0.15          # ... and this short after it (the closure before a final "k" or "t")
-ONSET_TOLERANCE_S = 0.08      # --self-test: each burst must start this close to its second
+ONSET_TOLERANCE_S = 0.08      # in the mix, each line must sit this close to its second (every run checks it)
+SEARCH_S = 0.5                # ... looked for this far either side of it
+CUT_QUIET_DB = 50             # ... and the mix must be this far under its voice at the cut that ends each shot
 
 
 class Stop(Exception):
@@ -124,12 +129,28 @@ def windows(shot_rows: list[tuple]) -> list[Window]:
     return out
 
 
+def rel(path: Path) -> str:
+    """How a path is shown, in messages and in the report: relative to the repository, or just
+    its name when it is somewhere else. Never an absolute path (they name the user's folders)."""
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return path.name
+
+
+def plain(text: str, args: list[str]) -> str:
+    """ffmpeg's own words, with every absolute path among `args` shown as rel() shows it."""
+    for arg in sorted((a for a in args if Path(a).is_absolute()), key=len, reverse=True):
+        text = text.replace(arg, rel(Path(arg)))
+    return text.replace(str(Path.home()), "~")
+
+
 def ffmpeg(args: list[str], level: str = "error", text: bool = True) -> subprocess.CompletedProcess:
     cmd = ["ffmpeg", "-hide_banner", "-nostats", "-nostdin", "-y", "-v", level, *args]
     r = subprocess.run(cmd, capture_output=True, text=text, errors="replace" if text else None)
     if r.returncode:
         err = r.stderr if text else r.stderr.decode(errors="replace")
-        raise Stop(1, f"ffmpeg failed:\n  {' '.join(cmd)}\n{err.strip()[-600:]}")
+        raise Stop(1, plain(f"ffmpeg failed:\n  {' '.join(cmd)}\n{err.strip()[-600:]}", args))
     return r
 
 
@@ -137,14 +158,14 @@ def duration(path: Path) -> float:
     r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
                         str(path)], capture_output=True, text=True)
     if r.returncode or not r.stdout.strip():
-        raise Stop(1, f"cannot read {path}: {r.stderr.strip()[-300:]}")
+        raise Stop(1, plain(f"cannot read {path}: {r.stderr.strip()[-300:]}", [str(path)]))
     return float(r.stdout.strip())
 
 
 def to_wav(src: Path, dst: Path) -> Path:
     """Any recording ffmpeg reads (m4a, mp3, wav, ogg, a video ...) as mono 48 kHz PCM."""
     if not src.is_file():
-        raise Stop(1, f"no such recording: {src}")
+        raise Stop(1, f"no such recording: {rel(src)}")
     ffmpeg(["-i", str(src), "-vn", "-map", "0:a:0", "-ac", "1", "-ar", str(RATE), "-c:a", "pcm_s16le", str(dst)])
     return dst
 
@@ -253,6 +274,7 @@ def edges(env: list[float], a: float, b: float, high: float, low: float, lo: flo
 @dataclass
 class Found:
     """What the silence detector made of one recording."""
+    src: Path
     name: str
     total: float
     voice: float              # envelope levels, dB
@@ -286,17 +308,30 @@ def find(wav: Path, name: str, silence_db: float | None, min_gap: float) -> Foun
         hi = (b + spans[n + 1][0]) / 2 if n + 1 < len(spans) else total
         s, e = edges(env, a, b, db, low, lo, hi)
         pieces.append(Piece(wav, max(lo, s - PAD_S), min(hi, e + PAD_S), name, still))
-    return Found(name, total, voice, noise, db, silence_db is None, quiet, still, pieces, ignored)
+    return Found(wav, name, total, voice, noise, db, silence_db is None, quiet, still, pieces, ignored)
 
 
-def describe(f: Found, min_gap: float) -> str:
+def describe(f: Found, min_gap: float, lines: list[Piece]) -> str:
+    """One recording in words, and every short sound in it that is in none of `lines`, with its
+    start and length: a short word taken for a click must be seen, not lost quietly."""
     text = (f"{f.name}: {f.total:.1f} s; voice {f.voice:.1f} dB, room noise {f.noise:.1f} dB; "
             f"under {f.db:.1f} dB{' (auto)' if f.auto else ''} is silence, {min_gap:g} s of it is a pause")
     if f.voice - f.noise < 20:
         text += "\n  the room noise is close to the voice: if the pieces look wrong, record nearer the phone"
     for a, b in f.ignored:
-        text += f"\n  ignored a {b - a:.2f} s sound at {a:.1f} s (shorter than {MIN_PIECE_S} s)"
+        if not any(p.src == f.src and p.start <= a and b <= p.end for p in lines):
+            text += f"\n  ignored a {b - a:.2f} s sound at {a:.1f} s (shorter than {MIN_PIECE_S} s)"
     return text
+
+
+def spare(pieces: list[Piece], want: int) -> list[int]:
+    """The numbers of the pieces that look like noises, when leaving them out gives `want`
+    pieces: each is shorter than half of the shortest piece that stays."""
+    order = sorted(range(len(pieces)), key=lambda i: pieces[i].length)
+    extra, kept = order[:len(pieces) - want], order[len(pieces) - want:]
+    if extra and kept and pieces[extra[-1]].length < pieces[kept[0]].length / 2:
+        return sorted(i + 1 for i in extra)
+    return []
 
 
 def pieces_table(pieces: list[Piece]) -> str:
@@ -335,9 +370,9 @@ def parse_pick(text: str, pieces: list[Piece]) -> list[Piece]:
 def from_takes(takes: list[Path], work: Path, want: int, silence_db: float | None, min_gap: float,
                pick: str | None, log: list[str]) -> list[Piece]:
     found = [find(to_wav(t, work / f"take{i}.wav"), t.name, silence_db, min_gap) for i, t in enumerate(takes)]
-    log += [describe(f, min_gap) for f in found]
     pieces = [p for f in found for p in f.pieces]
     chosen = parse_pick(pick, pieces) if pick else pieces
+    log += [describe(f, min_gap, chosen) for f in found]
     if len(chosen) == want:
         return chosen
     hint = gap_hint(found, want, min_gap)
@@ -346,6 +381,11 @@ def from_takes(takes: list[Path], work: Path, want: int, silence_db: float | Non
     lines = log + [f"found {len(pieces)} pieces" + (f", --pick keeps {len(chosen)}" if pick else "")
                    + f"; the video has {want} lines", pieces_table(pieces), "what to do:"]
     if len(pieces) > want:
+        noises = spare(pieces, want)
+        if noises:
+            lines += [f"  too short to be a line (a noise, a word said aside): piece {', '.join(map(str, noises))}. "
+                      "To leave that out,",
+                      "      --pick " + ",".join(str(n) for n in range(1, len(pieces) + 1) if n not in noises)]
         lines += ["  a line was said twice (two pieces of about the same length in a row): keep one,",
                   "      --pick 1,2,4,...     the pieces to use, in the order of the lines",
                   "  a line broke in two at a long pause (two short pieces in a row): join them,",
@@ -364,7 +404,7 @@ def from_lines(folder: Path, work: Path, rows: list[Window], silence_db: float |
                log: list[str]) -> list[Piece]:
     """One file per line, NN.*: each is trimmed to its first and last sound (inner pauses stay)."""
     if not folder.is_dir():
-        raise Stop(1, f"no such folder: {folder}")
+        raise Stop(1, f"no such folder: {rel(folder)}")
     files, missing = [], []
     for w in rows:
         hits = sorted(p for p in folder.glob(f"{w.n:02d}.*") if p.is_file())
@@ -373,15 +413,15 @@ def from_lines(folder: Path, work: Path, rows: list[Window], silence_db: float |
         else:
             missing.append(f"  {w.n:02d}.*: " + (", ".join(h.name for h in hits) or "missing"))
     if missing:
-        raise Stop(2, f"{folder} needs exactly one file per line, {rows[0].n:02d}.* to {rows[-1].n:02d}.*:\n"
+        raise Stop(2, f"{rel(folder)} needs exactly one file per line, {rows[0].n:02d}.* to {rows[-1].n:02d}.*:\n"
                    + "\n".join(missing))
     out = []
     for path in files:
         f = find(to_wav(path, work / f"line{path.stem}.wav"), path.name, silence_db, min_gap)
-        log.append(describe(f, min_gap))
         if not f.pieces:
             raise Stop(2, f"{path.name}: no voice found (nothing over {f.db:.1f} dB for {MIN_PIECE_S} s)")
-        out.append(Piece(f.pieces[0].src, f.pieces[0].start, f.pieces[-1].end, path.name, f.still))
+        out.append(Piece(f.src, f.pieces[0].start, f.pieces[-1].end, path.name, f.still))
+        log.append(describe(f, min_gap, out[-1:]))
     return out
 
 
@@ -488,11 +528,41 @@ def table(rows: list[Window], lengths: list[float], tempos: list[float], cap: fl
     return "\n".join(out)
 
 
-def rel(path: Path) -> str:
-    try:
-        return str(path.resolve().relative_to(ROOT))
-    except ValueError:
-        return path.name
+def peaks(pcm: array) -> list[int]:
+    """The loudest sample of every 10 ms."""
+    step = round(RATE * FRAME_S)
+    return [max(max(pcm[i:i + step]), -min(pcm[i:i + step])) for i in range(0, len(pcm), step)]
+
+
+def alike(line: list[int], heard: list[int], at: int) -> float:
+    """How much of the line's loudness curve the mix has, with the line starting at frame `at`."""
+    return sum(a * b for a, b in zip(line[max(0, -at):], heard[max(0, at):max(0, at + len(line))]))
+
+
+def misplaced(mixed: Path, rows: list[Window], wavs: list[Path], work: Path) -> tuple[list[str], str]:
+    """Listen to the mix itself, whatever the recording was. Every line must be in it where it
+    was put: its loudness curve is slid over the mix's, SEARCH_S each way around its second, and
+    the best match must be within ONSET_TOLERANCE_S of that second. And the mix must be quiet at
+    the cut that ends each shot, so that no line runs past it. Returns (what is wrong, facts)."""
+    heard = peaks(read_pcm(to_wav(mixed, work / "mixed.wav")))
+    quiet = percentile([p for p in heard if p] or [0], VOICE_PCT) * 10 ** (-CUT_QUIET_DB / 20)
+    reach, errs, worst = round(SEARCH_S / FRAME_S), [], 0.0
+    for w, wav in zip(rows, wavs):
+        line, at = peaks(read_pcm(wav)), round(w.start / FRAME_S)
+        lag = max(range(-reach, reach + 1), key=lambda k: alike(line, heard, at + k))
+        there = heard[max(0, at + lag):max(0, at + lag + len(line))]
+        if alike(line, heard, at + lag) <= 0.5 * math.sqrt(sum(a * a for a in line) * sum(b * b for b in there)):
+            errs.append(f"line {w.n} ({w.slug}) is not in the mix at {clock(w.start)}")
+        elif abs(lag) * FRAME_S >= ONSET_TOLERANCE_S:
+            errs.append(f"line {w.n} ({w.slug}) starts {abs(lag) * FRAME_S:.2f} s {'late' if lag > 0 else 'early'} "
+                        f"in the mix (it belongs at {clock(w.start)})")
+        else:
+            worst = max(worst, abs(lag) * FRAME_S)
+        cut = w.start + w.length + LEAD_S
+        if max(heard[round((cut - 0.15) / FRAME_S):round((cut + 0.15) / FRAME_S)], default=0) > quiet:
+            errs.append(f"line {w.n} ({w.slug}) is still sounding at the cut that ends its shot ({clock(cut)})")
+    return errs, (f"every line within {ONSET_TOLERANCE_S * 1000:.0f} ms of its second in the mix "
+                  f"(largest offset {worst * 1000:.0f} ms), silence at every cut")
 
 
 def place(lines: list[Piece], rows: list[Window], video: Path, out: Path, work: Path, max_tempo: float,
@@ -504,10 +574,8 @@ def place(lines: list[Piece], rows: list[Window], video: Path, out: Path, work: 
     fits = [fit(p, w.length, max_tempo, tighten) for p, w in zip(lines, rows)]
     late = [(w, f) for w, f in zip(rows, fits) if f.tempo is None]
     if late:
-        ways = [] if tighten else ["  --tighten         first shortens the pauses inside a line that runs long "
+        ways = [] if tighten else ["  --tighten  first shortens the pauses inside a line that runs long "
                                    "(no word is touched)"]
-        ways.append(f"  --max-tempo {math.ceil(max(f.need for f in fits) * 100) / 100:.2f}  would fit every line "
-                    f"as it is (now {max_tempo:g}; a voice stays clear up to about 1.25)")
         ways.append("  or say those lines again, brisker, in a second recording, and choose its pieces with --pick\n"
                     "  (--take first.m4a second.m4a: the second recording's pieces are numbered after the first's)")
         raise Stop(3, "\n".join(
@@ -525,6 +593,9 @@ def place(lines: list[Piece], rows: list[Window], video: Path, out: Path, work: 
     try:
         mux(video, track, part, total)
         errs, facts = check(video, part)
+        wrong, placed = misplaced(part, rows, wavs, work)
+        errs += wrong + [f"line {w.n} ({w.slug}) came out {length - w.length:.2f} s longer than its window"
+                         for w, length in zip(rows, lengths) if length > w.length + 0.05]
         if errs:
             raise Stop(1, "\n".join(log + ["the mix failed its check, nothing was written:"] + [f"  {e}" for e in errs]))
         part.replace(out)
@@ -536,7 +607,7 @@ def place(lines: list[Piece], rows: list[Window], video: Path, out: Path, work: 
             + ([f"sped up x{f.tempo:.3f}"] if f.tempo > 1 else [])
         if did:
             log.append(f"line {w.n} ({w.slug}) ran long: " + ", ".join(did))
-    log.append(f"checked: {facts}")
+    log += [f"checked: {facts}", f"placed: {placed}"]
 
 
 def make_test_take(path: Path, bursts: list[float], gaps: float | list[float] = 2.0, lead: float = 1.5,
@@ -598,7 +669,7 @@ def run(a: argparse.Namespace, shot_rows: list[tuple]) -> int:
             raise Stop(1, f"{tool} is not installed")
     out = a.out or (SELFTEST if a.self_test else VOICE)
     if not a.video.is_file():
-        raise Stop(1, f"no video at {a.video}: build it with scripts/make_video.py")
+        raise Stop(1, f"no video at {rel(a.video)}: build it with scripts/make_video.py")
     if out.resolve() == a.video.resolve():
         raise Stop(1, "--out is the video itself; choose another name")
     rows = windows(shot_rows)

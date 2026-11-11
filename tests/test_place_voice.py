@@ -151,10 +151,10 @@ def test_place_voice_refuses_a_line_that_cannot_fit_with_exit_code_3(video, tmp_
     said = capsys.readouterr().out
     assert code == 3 and not out.exists() and not (tmp_path / pv.REPORT_NAME).exists()
     assert "line 2 (two) does not fit: it lasts 5.6" in said and "at the top speed x1.12 it is still 0.6" in said
-    enough = re.search(r"--max-tempo (1\.\d\d)  would fit every line", said)[1]
-    assert 1.26 < float(enough) < 1.31 and f"{enough}!" in said   # the table marks the speed it would need
-    code, out = place(video, tmp_path, "--take", take, "--max-tempo", enough)
-    assert code == 0 and out.exists()                             # the way out it offers does work
+    assert re.search(r" 1\.2\d!", said)                           # the table marks the speed it would need
+    assert "--tighten" in said and "second recording" in said and "--max-tempo" not in said   # never past x1.12
+    code, out = place(video, tmp_path, "--take", take, "--max-tempo", "1.3")
+    assert code == 0 and out.exists()                             # the cap is still a flag, x1.12 unless told
 
 
 @needs_ffmpeg
@@ -237,3 +237,115 @@ def test_place_voice_never_writes_over_the_video_or_without_a_recording(video, t
     assert pv.main(["--self-test", "--video", str(video), "--out", str(video)], shot_rows=SHOTS) == 1
     assert video.read_bytes() == before and not (tmp_path / "v.mp4").exists()
     assert "no such recording" in capsys.readouterr().err
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("bursts, gaps, lead", [
+    ([2.0, 3.0, 1.5], [2.0, 2.0, 3.0], 1.5),                      # three seconds of silence after the last line
+    ([2.0, 3.0, 1.5, 0.2], [2.0, 2.0, 3.0, 0.05], 1.5),           # ... and then the click of the stop button
+    ([2.0, 3.0, 1.5], [2.0, 2.0, 2.0], 4.0),                      # four seconds of silence before the first line
+])
+def test_place_voice_silence_at_either_end_of_the_take_is_not_a_piece(tmp_path, bursts, gaps, lead):
+    take = tmp_path / "take.m4a"
+    starts = pv.make_test_take(take, bursts, gaps=gaps, lead=lead)
+    found = pv.find(pv.to_wav(take, tmp_path / "take.wav"), take.name, None, pv.MIN_GAP_S)
+    assert len(found.pieces) == 3 and len(found.ignored) == len(bursts) - 3
+    assert [p.start == pytest.approx(s - pv.PAD_S, abs=0.03) for p, s in zip(found.pieces, starts)] == [True] * 3
+    assert found.pieces[-1].end < starts[2] + 1.5 + 0.2          # the last line ends at its sound, not at the file's end
+
+
+@needs_ffmpeg
+def test_place_voice_names_the_pick_that_leaves_a_noise_out(video, tmp_path, capsys):
+    take = tmp_path / "take.m4a"
+    pv.make_test_take(take, [2.4, 3.0, 2.2, 0.8], gaps=[2.0, 2.0, 3.0, 0.3])   # the phone picked up after the last line
+    assert place(video, tmp_path, "--take", take)[0] == 2         # that is a sound of 0.8 s: a fourth piece
+    said = capsys.readouterr().out
+    assert "too short to be a line (a noise, a word said aside): piece 4." in said and "--pick 1,2,3\n" in said
+    assert place(video, tmp_path, "--take", take, "--pick", "1,2,3")[0] == 0
+
+
+def test_place_voice_describe_lists_only_the_short_sounds_that_are_in_no_line():
+    wav = Path("take.wav")
+    found = pv.Found(wav, "take.m4a", 20.0, -20.0, -60.0, -40.0, True, [], (), [], [(5.0, 5.3), (12.0, 12.4)])
+    said = pv.describe(found, 1.2, [pv.Piece(wav, 1.0, 8.0)])     # pieces joined over the first sound: it is in the line
+    assert "ignored a 0.40 s sound at 12.0 s (shorter than 0.6 s)" in said and "at 5.0 s" not in said
+
+
+@needs_ffmpeg
+def test_place_voice_lists_the_short_sounds_it_leaves_out_on_screen_and_in_the_report(video, tmp_path, capsys):
+    take = tmp_path / "take.m4a"                                  # a cough between lines 1 and 2, a click at the end
+    starts = pv.make_test_take(take, [2.0, 0.3, 3.0, 1.5, 0.2], gaps=[1.5, 1.5, 2.0, 3.0, 0.05])
+    code, out = place(video, tmp_path, "--take", take)
+    assert code == 0 and len(sounds(out, tmp_path)) == 3          # they are left out of the mix ...
+    for text in (capsys.readouterr().out, (tmp_path / pv.REPORT_NAME).read_text(encoding="utf-8")):
+        left = re.findall(r"ignored a (\d\.\d\d) s sound at (\d+\.\d) s \(shorter than 0\.6 s\)", text)
+        assert [float(at) for _, at in left] == [pytest.approx(starts[1], abs=0.1), pytest.approx(starts[4], abs=0.1)]
+        assert [float(length) for length, _ in left] == [pytest.approx(0.3, abs=0.1), pytest.approx(0.2, abs=0.1)]
+
+
+@needs_ffmpeg
+def test_place_voice_listens_to_the_mix_and_refuses_a_line_that_is_not_on_its_second(video, tmp_path, capsys, monkeypatch):
+    take = tmp_path / "take.m4a"
+    pv.make_test_take(take, [2.0, 3.0, 1.5], voice=True)
+    code, out = place(video, tmp_path, "--take", take)
+    assert code == 0
+    assert "placed: every line within 80 ms of its second in the mix (largest offset 0 ms), silence at every cut" \
+        in (tmp_path / pv.REPORT_NAME).read_text(encoding="utf-8")
+    out.unlink()
+    capsys.readouterr()
+    track = pv.write_track                                        # a fault: line 2 lands 0.4 s late in the mix
+    monkeypatch.setattr(pv, "write_track", lambda lines, total, dst: track(
+        [(wav, at + (0.4 if n == 1 else 0)) for n, (wav, at) in enumerate(lines)], total, dst))
+    code, out = place(video, tmp_path, "--take", take)
+    err = capsys.readouterr().err
+    assert code == 1 and "line 2 (two) starts 0.40 s late in the mix (it belongs at 0:04.3)" in err
+    assert "line 1 (one)" not in err and "line 3 (three)" not in err
+    assert not out.exists() and not list(tmp_path.glob("*.part"))
+
+
+@needs_ffmpeg
+def test_place_voice_refuses_a_mix_where_a_line_sounds_past_the_cut_of_its_shot(video, tmp_path, capsys, monkeypatch):
+    take = tmp_path / "take.m4a"
+    pv.make_test_take(take, [2.0, 4.6, 1.5])                      # line 2 runs to the cut at 9 s if nobody speeds it up
+    monkeypatch.setattr(pv, "fit", lambda piece, window, max_tempo, tighten=False: pv.Fit((), piece.length, 1.0, 1.0))
+    code, out = place(video, tmp_path, "--take", take)
+    err = capsys.readouterr().err
+    assert code == 1 and not out.exists() and not list(tmp_path.glob("*.part"))
+    assert "line 2 (two) is still sounding at the cut that ends its shot (0:09.0)" in err
+    assert "line 2 (two) came out 0.3" in err and "line 3 (three)" not in err
+
+
+@needs_ffmpeg
+def test_place_voice_never_shows_an_absolute_path(video, tmp_path, capsys):
+    """The recording and --out may live anywhere and the report gets pasted: messages and report
+    name files, or paths inside the repository, never the folders above them."""
+    take, long, broken = tmp_path / "take.m4a", tmp_path / "long.m4a", tmp_path / "broken.m4a"
+    pv.make_test_take(take, [2.0, 3.0, 1.5])
+    pv.make_test_take(long, [2.0, 5.5, 1.5])
+    broken.write_text("not a recording")
+    for args, code in ((["--take", take], 0), (["--take", take, "--pick", "1,2"], 2), (["--take", long], 3),
+                       (["--take", tmp_path / "nope.m4a"], 1), (["--take", broken], 1),
+                       (["--lines", tmp_path / "nowhere"], 1), (["--lines", tmp_path], 2)):
+        assert place(video, tmp_path, *args)[0] == code
+    shown = capsys.readouterr()
+    text = shown.out + shown.err + (tmp_path / pv.REPORT_NAME).read_text(encoding="utf-8")
+    assert "voice.mp4: take take.m4a on video.mp4" in text and "no such recording: nope.m4a" in text
+    assert "ffmpeg failed" in text and "-i broken.m4a" in text and "no such folder: nowhere" in text
+    assert str(tmp_path.parent) not in text and not re.search(r"(?<![\w.~-])/[\w.-]+/", text)
+    assert pv.rel(ROOT / "docs" / "video" / "out" / "x.mp4") == "docs/video/out/x.mp4"   # inside the repository: from its root
+
+
+def test_place_voice_guide_leads_with_the_one_command_and_says_how_much_room_each_line_has():
+    spec2 = importlib.util.spec_from_file_location("check_video_assets", ROOT / "scripts" / "check_video_assets.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    guide = (ROOT / "docs" / "video" / "VOICE_OVER.md").read_text(encoding="utf-8")
+    assert (guide.index("## Record once, at your own pace") < guide.index("scripts/place_voice.py --take")
+            < guide.index("## The lines") < guide.index("## Other ways"))
+    room = dict(re.findall(r"^\| (\d+) \| \d:\d\d\.\d \| [^|]+ \| ([^|]+) \|", guide, re.M))
+    for w, shot in zip(pv.windows(pv.shots()), check.shots()):
+        pace = len(shot["say"].split()) / w.length                # the words a second the line asks for
+        assert room[str(w.n)].strip() == f"{w.length:.1f} s ({pace:.1f} words/s" + (", **tight**)" if pace > 2.2 else ")")
+    assert "more than 2.2 words a second is marked **tight**" in guide
+    script = (ROOT / "docs" / "VIDEO_SCRIPT.md").read_text(encoding="utf-8")
+    assert "`scripts/place_voice.py`" in script and "×1.12 at most" in script and "never speed up the voice" not in script
