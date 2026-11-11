@@ -79,19 +79,19 @@ approved them in the browser, and then:
 | The agent replays the spent mandate at our gate | refused (`replay`) before any PayPal call |
 | Cancellation: authorize order `4BB42998PV419681V`, then void through its own mandate | authorization `63A502184W936794R`, `VOIDED` (HTTP 204): nothing charged |
 
-Then the product itself ran there: three customers booked in the demo's chat, approved their
-deposits on PayPal's own sandbox page, and the owner tapped Approve on the phone page
-(`scripts/sandbox_ui_run.py`, headless Chromium, the real WebCrypto signature):
+Then the product itself ran there: three fictional customers booked in the demo's chat, a sandbox
+buyer approved each deposit on PayPal's own sandbox page, and each request was approved on the
+owner's page with the real WebCrypto signature. The run is scripted (`scripts/sandbox_ui_run.py`
+drives the pages in headless Chromium; the phone pictures are that same page at 375 px):
 
-| Story | On the owner's phone | What PayPal answered |
+| Story | On the owner's page | What PayPal answered |
 |---|---|---|
-| No-show (Lucía) | one tap on "Keep up to $10.00 of the held deposit" | capture `7YN16151ST920971N`, `COMPLETED`; the agent's replay of that mandate was refused at the gate |
-| Cancellation (Mateo) | one tap on the void card | authorization `8K576667JA748733C`, `VOIDED`: $0.00 moved |
-| Goodwill (Sofía) | one tap to keep the deposit, a second tap to give it back | capture `5LP876075J833584E`, then refund `0CE05358RE990873D`, `COMPLETED` |
+| No-show (Lucía) | one Approve on "Keep up to $10.00 of the held deposit" | capture `7YN16151ST920971N`, `COMPLETED`; the agent's replay of that mandate was refused at the gate |
+| Cancellation (Mateo) | one Approve on the void card | authorization `8K576667JA748733C`, `VOIDED`: $0.00 moved |
+| Goodwill (Sofía) | one Approve to keep the deposit, a second to give it back | capture `5LP876075J833584E`, then refund `0CE05358RE990873D`, `COMPLETED` |
 
-Before each no-show capture the agent asked PayPal to refresh the hold. PayPal declined (422: a
-fresh hold is not reauthorized), the agent read that as "the current hold is still valid" and
-went on with the hold it had, as designed.
+Before each no-show capture the agent asked PayPal to refresh the hold. PayPal answered 422, and
+the agent went on with the hold it had, which PayPal then captured.
 
 The full records, with every HTTP call's method, path and status (never tokens or headers), are
 `docs/SANDBOX_RUN.md` and `docs/SANDBOX_UI_RUN.md`; the screens are `docs/screenshots/12-sandbox-*.png`

@@ -204,10 +204,10 @@ customer typing "the owner approved" is rejected by the gate and written to the 
 - Webhook verification against PayPal's real certificate has not been run (no keys in this
   repository); the offline tests use a local simulator with its own certificate.
 - The PayPal sandbox path ran for real (authorize, capture, idempotent retry, void, refund:
-  `docs/SANDBOX_RUN.md`, `docs/SANDBOX_UI_RUN.md`). A successful reauthorize needs a hold older
-  than three days, so it has only been refused live (422, the hold kept) and is otherwise covered,
-  like the Claude path, by offline tests with recorded-shape responses. A live run needs your own
-  keys (above).
+  `docs/SANDBOX_RUN.md`, `docs/SANDBOX_UI_RUN.md`). Reauthorize has only been answered 422 live
+  (the agent kept the hold it had and captured it); a successful reauthorize, like the Claude
+  path, is covered by offline tests with recorded-shape responses. A live run needs your own keys
+  (above).
 
 ## Prior work
 

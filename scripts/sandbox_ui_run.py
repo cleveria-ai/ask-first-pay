@@ -47,9 +47,10 @@ Appended by `scripts/sandbox_ui_run.py`. Each run played three customers through
 lists the ledger rows with the ids PayPal returned and every HTTP call's method, path and status
 (never tokens, headers or credentials). Screenshots: `docs/screenshots/12-sandbox-*.png`.
 
-A `reauthorize` answered 422 is expected: before a no-show capture the agent asks PayPal to refresh
-the hold, PayPal declines for a fresh one, and the agent goes on with the hold it has
-(`refresh_hold` in `src/ask_first_pay/agent/tools.py`).
+About the `reauthorize` calls answered 422: before a no-show capture the agent asks PayPal to
+refresh the hold (`refresh_hold` in `src/ask_first_pay/agent/tools.py`). PayPal answered 422 and
+the agent went on with the hold it had, which PayPal then captured. Only the status is recorded
+here, not PayPal's reason.
 """
 
 
