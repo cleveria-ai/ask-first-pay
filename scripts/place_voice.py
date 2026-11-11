@@ -602,7 +602,7 @@ def run(a: argparse.Namespace, shot_rows: list[tuple]) -> int:
     if out.resolve() == a.video.resolve():
         raise Stop(1, "--out is the video itself; choose another name")
     rows = windows(shot_rows)
-    print("cutting, fitting, mixing and checking: about half a minute ...", file=sys.stderr, flush=True)
+    print("cutting, fitting, mixing and checking: about half a minute ...", flush=True)
     with tempfile.TemporaryDirectory(prefix="place_voice_") as tmp:
         work = Path(tmp)
         if a.self_test:
