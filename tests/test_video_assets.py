@@ -80,6 +80,35 @@ def test_the_sandbox_still_says_what_it_is_and_shows_only_ids_from_the_record():
     assert "offline" in rec.closing_card() and rec.SANDBOX_RECORD in rec.closing_card()
 
 
+def test_the_answer_diagram_runs_on_a_fixed_timeline_ends_still_and_stays_readable():
+    """Shot 3 explains the mechanism as a diagram that builds itself: every change is a CSS
+    animation with a fixed delay that keeps its end state, at most three things change at once,
+    the last change ends two seconds before the shot does, and nothing is written under 24 px."""
+    import re
+    rec = load("record_demo")
+    seconds = next(s for n, _, s, _ in rec.SHOTS if n == 3)
+    beats, card = rec.ANSWER_BEATS, rec.answer_card()
+    starts = [at for at, _, _ in beats]
+    assert starts == sorted(starts) and starts[0] >= 0
+    assert max(at + lasts for at, lasts, _ in beats) <= seconds - rec.ANSWER_STILL_S
+    assert max(sum(a <= at < a + d for a, d, _ in beats) for at, _, _ in beats) <= 3
+    classes = {c for quoted, bare in re.findall(r'class=(?:"([^"]*)"|([\w-]+))', rec.ANSWER_HTML)
+               for c in (quoted or bare).split()}
+    for at, lasts, what in beats:
+        for cls, keyframes in (piece.split(":") for piece in what.split()):
+            assert f".flow .{cls}{{animation:{keyframes} {lasts}s ease {at}s forwards}}" in card
+            assert f"@keyframes {keyframes}{{" in rec.ANSWER_CSS and cls in classes, (cls, keyframes)
+    for chance in ("<script", "infinite", "url(", "http", "random"):     # nothing but the delays
+        assert chance not in card
+    assert min(int(px) for px in re.findall(r"font-size:(\d+)px", rec.ANSWER_CSS)) >= 24
+    assert "font:" not in rec.ANSWER_CSS and "body.card-only #wrap{visibility:hidden}" in rec.STAGE
+    for text in ("Customer", "AI front desk", "PayPal", "keep", "release", "give back", "HOLD $10.00",
+                 "on its own:", "books · creates the order", "holds the deposit", "$0.00 moved", "ask",
+                 "Owner's phone", "Keep up to", "Approve", "single-use", "used",
+                 "It can hold it. Only you can move it."):
+        assert text in rec.ANSWER_HTML, text
+
+
 def test_no_third_party_marks_in_what_the_recorder_draws():
     rec = load("record_demo")
     drawn = (rec.STAGE + rec.answer_card() + rec.closing_card() + rec.DISCLOSURE + rec.sandbox_card()
