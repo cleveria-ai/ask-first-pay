@@ -123,8 +123,8 @@ def test_make_video_voice_over_guide_matches_the_shot_list():
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
     guide = (ROOT / "docs" / "video" / "VOICE_OVER.md").read_text(encoding="utf-8")
-    rows = {int(m[1]): (m[2], m[3]) for m in re.finditer(r"^\| (\d+) \| (\d:\d\d\.\d) \| [^|]+ \| ([^|]+) \|$",
-                                                        guide, re.M)}
+    rows = {int(m[1]): (m[2], m[3])                 # | Shot | Start | Ends by | Room | Say |
+            for m in re.finditer(r"^\| (\d+) \| (\d:\d\d\.\d) \| [^|]+ \| [^|]+ \| ([^|]+) \|$", guide, re.M)}
     at = 0
     for shot in check.shots():
         start, say = rows[shot["n"]]

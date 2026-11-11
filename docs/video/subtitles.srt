@@ -12,14 +12,14 @@ Her deposit is held on PayPal, and
 only the owner's tap can keep it.
 
 4
-00:00:10,300 --> 00:00:15,758
-I run qnowa: booking with deposits for
-clinics and salons in Latin America.
+00:00:10,300 --> 00:00:15,298
+I run qnowa: deposit booking
+for clinics in Latin America.
 
 5
-00:00:15,808 --> 00:00:19,650
-The first thing owners ask
-is: can it touch my money?
+00:00:15,348 --> 00:00:19,650
+The first thing owners ask:
+can it touch my money?
 
 6
 00:00:20,300 --> 00:00:22,096
@@ -172,31 +172,26 @@ Every attempt, even the refused one,
 sits in a ledger anyone can check.
 
 40
-00:02:30,300 --> 00:02:31,691
+00:02:30,300 --> 00:02:32,211
 Not only a simulation.
 
 41
-00:02:31,741 --> 00:02:35,685
+00:02:32,261 --> 00:02:37,650
 Capture, void and refund ran
 against the real PayPal sandbox.
 
 42
-00:02:35,735 --> 00:02:37,650
-The ids are in the repository.
-
-43
-00:02:38,300 --> 00:02:40,062
+00:02:38,300 --> 00:02:40,817
 Can it touch my money?
 
-44
-00:02:40,112 --> 00:02:41,297
+43
+00:02:40,867 --> 00:02:42,567
 It can hold it.
 
-45
-00:02:41,347 --> 00:02:43,026
+44
+00:02:42,617 --> 00:02:45,017
 Only you can move it.
 
-46
-00:02:43,076 --> 00:02:46,650
-Ask First Pay, designed
-for qnowa's clinics.
+45
+00:02:45,067 --> 00:02:46,650
+Ask First Pay.
