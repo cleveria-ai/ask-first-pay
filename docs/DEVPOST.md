@@ -199,7 +199,7 @@ to reuse. In the sandbox run the same grid shows PayPal's own ids next to each a
   (scripted model, simulated PayPal) and says so on screen, plus one still screenshot of the
   ledger after the sandbox run; the business and customers are
   fictional, and the video shows no brand but PayPal's.
-- 545 automated tests (2026-11-11), all offline, including the attacks listed under "Try to break it"
+- 579 automated tests (2026-11-11), all offline, including the attacks listed under "Try to break it"
   in the README.
 
 ## What we learned
