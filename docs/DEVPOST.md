@@ -79,10 +79,27 @@ approved them in the browser, and then:
 | The agent replays the spent mandate at our gate | refused (`replay`) before any PayPal call |
 | Cancellation: authorize order `4BB42998PV419681V`, then void through its own mandate | authorization `63A502184W936794R`, `VOIDED` (HTTP 204): nothing charged |
 
-The full record, with every HTTP call's method, path and status (never tokens or headers), is
-`docs/SANDBOX_RUN.md`, and `tests/test_sandbox_evidence.py` keeps this table and that record in
-step. The demo and the video run offline by default (scripted model, simulated PayPal) and say so
-on screen, so anyone can run them without keys.
+Then the product itself ran there: three fictional customers booked in the demo's chat, a sandbox
+buyer approved each deposit on PayPal's own sandbox page, and each request was approved on the
+owner's page with the real WebCrypto signature. The run is scripted (`scripts/sandbox_ui_run.py`
+drives the pages in headless Chromium; the phone pictures are that same page at 375 px):
+
+| Story | On the owner's page | What PayPal answered |
+|---|---|---|
+| No-show (Lucía) | one Approve on "Keep up to $10.00 of the held deposit" | capture `7YN16151ST920971N`, `COMPLETED`; the agent's replay of that mandate was refused at the gate |
+| Cancellation (Mateo) | one Approve on the void card | authorization `8K576667JA748733C`, `VOIDED`: $0.00 moved |
+| Goodwill (Sofía) | one Approve to keep the deposit, a second to give it back | capture `5LP876075J833584E`, then refund `0CE05358RE990873D`, `COMPLETED` |
+
+Before each no-show capture the agent asked PayPal to refresh the hold. PayPal answered 422, and
+the agent went on with the hold it had, which PayPal then captured.
+
+The full records, with every HTTP call's method, path and status (never tokens or headers), are
+`docs/SANDBOX_RUN.md` and `docs/SANDBOX_UI_RUN.md`; the screens are `docs/screenshots/12-sandbox-*.png`
+(the chip reads "PayPal sandbox", the ledger shows PayPal's ids); `tests/test_sandbox_evidence.py`
+keeps these tables and those records in step. In these runs the agent was the offline scripted
+model, and PayPal's webhook was not used (the buyer's return to the site confirmed the hold). The
+demo and the video run offline by default (scripted model, simulated PayPal) and say so on screen,
+so anyone can run them without keys.
 
 ## How we built it
 
@@ -160,7 +177,8 @@ the free Community edition:
 
 - It works against PayPal for real: one owner approval became exactly one sandbox capture
   (`998786236C479363B`), the retry with the same `PayPal-Request-Id` returned that same capture,
-  and a cancellation became a void (`63A502184W936794R`). See *Proven on the real PayPal sandbox*.
+  and a cancellation became a void (`63A502184W936794R`). The three stories also ran end to end
+  through the product's own screens, refund included. See *Proven on the real PayPal sandbox*.
 - The agent cannot move money on its own through any tool it holds: the tests use a spy provider
   and an injected "owner approved" message and assert that nothing moved. A decline is final and
   a second approval is refused.
@@ -193,6 +211,18 @@ the free Community edition:
 - Per-owner policies (for example "approve no-show captures under 20.00 automatically") expressed
   as standing mandates with their own cap and expiry.
 
+## Prior work
+
+- New for this hackathon: everything under `src/ask_first_pay/` (the PayPal adapter for Orders v2
+  and Payments v2, the gate that puts capture, void and refund behind a mandate, the agent and
+  its ten tools, webhook verification, the demo pages) and its tests.
+- Reused: our own Apache-2.0 library `libs/ask-first-mandate` (single-use signed mandates,
+  hash-chained ledger, receipts). We created it on 2026-10-17, inside this submission period, for
+  our "Ask First for Alexa+" entry. Its identity signing and ledger were ported from our earlier
+  public repository `soyharso/agent-identity-firma` (August 2026) and extended; the single-use
+  mandate is new in that library. Nothing in it knows about PayPal.
+- Third party: AG Grid Community 36.3.0 (MIT), vendored unmodified.
+
 ## Screenshots (image gallery)
 
 All from the offline demo in headless Chromium (`scripts/screenshots.py`), PNG.
@@ -210,6 +240,18 @@ All from the offline demo in headless Chromium (`scripts/screenshots.py`), PNG.
 | `docs/screenshots/09-owner-void-mobile.png` | 375x812 | a cancellation card: "Moves $0.00 · releases the $10.00 hold" |
 | `docs/screenshots/10-owner-today-mobile.png` | 375x812 | the Today panel at the end of the day: "$0.00 moved without your signature", computed from the ledger |
 | `docs/screenshots/11-owner-today-dark.png` | 375x812 | the Today panel in dark mode |
+
+From the run against the real PayPal sandbox (`scripts/sandbox_ui_run.py`), PNG:
+
+| File | Size | Shows |
+|---|---|---|
+| `docs/screenshots/12-sandbox-chat-held.png` | 1280x720 | back from PayPal's sandbox page: the deposit is held, the chip reads "PayPal sandbox" |
+| `docs/screenshots/12-sandbox-owner-approval.png` | 1280x720 | the owner's card for a real PayPal authorization |
+| `docs/screenshots/12-sandbox-owner-mobile.png` | 375x812 | the same card on the phone |
+| `docs/screenshots/12-sandbox-ledger-replay.png` | 1280x720 | the real capture executed once; the replay rejected |
+| `docs/screenshots/12-sandbox-cancellation-voided.png` | 1280x720 | the cancellation: the real hold voided, nothing charged |
+| `docs/screenshots/12-sandbox-ledger.png` | 1280x720 | the ledger after the three stories, with the PayPal refund id in the row detail |
+| `docs/screenshots/12-sandbox-today-mobile.png` | 375x812 | the Today panel after the sandbox run |
 
 ## Built with
 

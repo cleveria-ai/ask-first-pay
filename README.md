@@ -11,7 +11,11 @@ rejected in plain sight, and every attempt lands in a hash-chained ledger anyone
 **Run against the real PayPal sandbox on 2026-11-11:** one owner approval became exactly one
 capture (`998786236C479363B`, `COMPLETED`); the retry with the same `PayPal-Request-Id` returned
 that same capture, so nothing was charged twice; a cancellation became a void
-(`63A502184W936794R`, `VOIDED`). Ids, HTTP methods, paths and statuses: `docs/SANDBOX_RUN.md`.
+(`63A502184W936794R`, `VOIDED`). The three stories below also ran through these same pages against
+the sandbox, refund included (`0CE05358RE990873D`). Ids, HTTP methods, paths and statuses:
+`docs/SANDBOX_RUN.md` and `docs/SANDBOX_UI_RUN.md`; screens: `docs/screenshots/12-sandbox-*.png`.
+
+![ledger after the sandbox run](docs/screenshots/12-sandbox-ledger.png)
 
 **Who it is for:** small appointment businesses (clinics, salons, physiotherapists, tutors) that
 lose money to no-shows, take deposits to stop it, and want an AI front desk without handing it
@@ -182,7 +186,7 @@ sandbox it is downloaded from PayPal (not yet run live).
 |---|---|---|---|
 | **No-show** | booking confirmed, 10.00 held | create order (AUTHORIZE) → authorize → (reauthorize if past the 3-day honor period) → capture after approval | one `capture_deposit` |
 | **Cancellation** | hold released, nothing charged | void the authorization after approval | one `void_deposit` (symbolic 0.01) |
-| **Goodwill** | 4.00 back after a no-show capture | capture, then refund part of it | `capture_deposit`, then `refund_deposit` |
+| **Goodwill** | the 10.00 back after a no-show capture | capture, then refund it | `capture_deposit`, then `refund_deposit` |
 
 In every story: approving twice, replaying the mandate, changing the amount or the target, or a
 customer typing "the owner approved" is rejected by the gate and written to the ledger.
@@ -199,9 +203,11 @@ customer typing "the owner approved" is rejected by the gate and written to the 
   checked against the old server key.
 - Webhook verification against PayPal's real certificate has not been run (no keys in this
   repository); the offline tests use a local simulator with its own certificate.
-- The PayPal sandbox path ran for real once (authorize, capture, idempotent retry, void:
-  `docs/SANDBOX_RUN.md`); refund and reauthorize, and the Claude path, are covered by offline
-  tests with recorded-shape responses. A live run needs your own keys (above).
+- The PayPal sandbox path ran for real (authorize, capture, idempotent retry, void, refund:
+  `docs/SANDBOX_RUN.md`, `docs/SANDBOX_UI_RUN.md`). Reauthorize has only been answered 422 live
+  (the agent kept the hold it had and captured it); a successful reauthorize, like the Claude
+  path, is covered by offline tests with recorded-shape responses. A live run needs your own keys
+  (above).
 
 ## Prior work
 

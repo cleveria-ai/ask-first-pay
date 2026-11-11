@@ -58,7 +58,8 @@ step.
 | No model brand on screen (G17) | `ASK_FIRST_VIDEO=1`; chip "offline scripted model" |
 
 Not used: the face-cam (voice only), a live model (offline scripted model), the live sandbox
-payer page (no capture in `docs/SANDBOX_RUN.md` yet), "every owner asked" and "we're building
+payer page (the video was built from the offline demo before the sandbox runs of 2026-11-11,
+which are documented apart in `docs/SANDBOX_RUN.md` and `docs/SANDBOX_UI_RUN.md`), "every owner asked" and "we're building
 this into qnowa" (not confirmed; see `docs/FOUNDER_FACTS.md`), the retry/network-drop insert (G9:
 not verified against the sandbox), the phone vibration (G6: a headless recording cannot show it).
 
