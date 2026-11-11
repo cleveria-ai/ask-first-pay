@@ -99,7 +99,8 @@ The full records, with every HTTP call's method, path and status (never tokens o
 keeps these tables and those records in step. In these runs the agent was the offline scripted
 model, and PayPal's webhook was not used (the buyer's return to the site confirmed the hold). The
 demo and the video run offline by default (scripted model, simulated PayPal) and say so on screen,
-so anyone can run them without keys.
+so anyone can run them without keys; the video adds one still of the sandbox ledger
+(`docs/screenshots/12-sandbox-ledger.png`), labelled as a screenshot.
 
 ## How we built it
 
@@ -186,7 +187,8 @@ the free Community edition:
   chain check.
 - The whole demo runs in two minutes with no keys, and the same code switches to Claude and the
   PayPal sandbox by setting environment variables. The video is recorded from that offline demo
-  (scripted model, simulated PayPal) and says so on screen; the business and customers are
+  (scripted model, simulated PayPal) and says so on screen, plus one still screenshot of the
+  ledger after the sandbox run; the business and customers are
   fictional, and the video shows no brand but PayPal's.
 - 545 automated tests (2026-11-11), all offline, including the attacks listed under "Try to break it"
   in the README.

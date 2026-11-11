@@ -20,7 +20,7 @@ def test_shotlist_subtitles_and_recorder_agree_and_fit_in_180_s():
 
 def test_a_shotlist_over_three_minutes_or_out_of_sync_fails(tmp_path, monkeypatch):
     check = load("check_video_assets")
-    text = check.SHOTLIST.read_text(encoding="utf-8").replace("| 10 | 9 | 2:30-2:39 |", "| 10 | 30 | 2:30-3:00 |")
+    text = check.SHOTLIST.read_text(encoding="utf-8").replace("| 11 | 9 | 2:38-2:47 |", "| 11 | 22 | 2:38-3:00 |")
     bad = tmp_path / "SHOTLIST.md"
     bad.write_text(text, encoding="utf-8")
     monkeypatch.setattr(check, "SHOTLIST", bad)
@@ -44,7 +44,7 @@ def test_record_demo_dry_run_needs_no_browser(capsys):
     rec = load("record_demo")
     assert rec.main(["--dry-run"]) == 0
     out = capsys.readouterr().out
-    assert out.count(".webm") == 10 and "total 159 s (2:39)" in out
+    assert out.count(".webm") == 11 and "total 167 s (2:47)" in out
     assert rec.SIZE == {"width": 1280, "height": 720}
     assert rec.VIDEO == {k: int(v * rec.SCALE) for k, v in rec.SIZE.items()} == {"width": 1920, "height": 1080}
     assert f"html{{zoom:{rec.SCALE}}}" in rec.STAGE
@@ -61,8 +61,28 @@ def test_record_demo_records_every_shot_once_and_says_what_runs():
     assert "scripted model" in rec.DISCLOSURE and "scripted model" in rec.closing_card()
 
 
+def test_the_sandbox_still_says_what_it_is_and_shows_only_ids_from_the_record():
+    """Shot 10 is the one shot that is not the offline demo: a committed screenshot, labelled as a
+    screenshot, with PayPal ids that are all in docs/SANDBOX_UI_RUN.md (as capture, void, refund)."""
+    import re
+    rec = load("record_demo")
+    record = (ROOT / rec.SANDBOX_RECORD).read_text(encoding="utf-8")
+    ids = dict(re.findall(r"(Capture|Void|Refund) ([0-9A-Z]{17})", rec.SANDBOX_IDS))
+    assert set(ids) == {"Capture", "Void", "Refund"}
+    assert f"PayPal capture id {ids['Capture']} (COMPLETED)" in record
+    assert f"PayPal authorization {ids['Void']} (VOIDED)" in record
+    assert f"PayPal refund id {ids['Refund']} (COMPLETED)" in record
+    date = re.search(r"\d{4}-\d\d-\d\d", rec.SANDBOX_TITLE).group(0)
+    assert f"## Run {date}T" in record and "sandbox" in rec.SANDBOX_TITLE
+    assert "screenshot" in rec.SANDBOX_NOTE.lower() and rec.SANDBOX_RECORD in rec.SANDBOX_NOTE
+    assert rec.SANDBOX_STILL.is_file() and rec.SANDBOX_STILL.name == "12-sandbox-ledger.png"
+    assert rec.SANDBOX_STILL_URL in rec.sandbox_card()
+    assert "offline" in rec.closing_card() and rec.SANDBOX_RECORD in rec.closing_card()
+
+
 def test_no_third_party_marks_in_what_the_recorder_draws():
     rec = load("record_demo")
-    drawn = (rec.STAGE + rec.answer_card() + rec.closing_card() + rec.DISCLOSURE).lower()
+    drawn = (rec.STAGE + rec.answer_card() + rec.closing_card() + rec.DISCLOSURE + rec.sandbox_card()
+             + rec.SANDBOX_TITLE + rec.SANDBOX_NOTE + rec.SANDBOX_IDS).lower()
     for mark in ("claude", "anthropic", "ag grid", "whatsapp", "chrome", "alexa"):
         assert mark not in drawn
