@@ -289,8 +289,9 @@ def test_place_voice_listens_to_the_mix_and_refuses_a_line_that_is_not_on_its_se
     pv.make_test_take(take, [2.0, 3.0, 1.5], voice=True)
     code, out = place(video, tmp_path, "--take", take)
     assert code == 0
-    assert "placed: every line within 80 ms of its second in the mix (largest offset 0 ms), silence at every cut" \
-        in (tmp_path / pv.REPORT_NAME).read_text(encoding="utf-8")
+    match = re.search(r"placed: every line within 80 ms of its second in the mix \(largest offset 0 ms, "
+                      r"weakest match (\d\.\d\d)\), silence at every cut", (tmp_path / pv.REPORT_NAME).read_text())
+    assert float(match[1]) > 0.95 > pv.MIN_MATCH                  # the same curve: far from the refusal
     out.unlink()
     capsys.readouterr()
     track = pv.write_track                                        # a fault: line 2 lands 0.4 s late in the mix
@@ -316,6 +317,24 @@ def test_place_voice_refuses_a_mix_where_a_line_sounds_past_the_cut_of_its_shot(
 
 
 @needs_ffmpeg
+def test_place_voice_no_listen_writes_the_mix_without_the_placement_check_and_says_so(video, tmp_path, capsys, monkeypatch):
+    take = tmp_path / "take.m4a"
+    pv.make_test_take(take, [2.0, 4.6, 1.5])
+    monkeypatch.setattr(pv, "misplaced", lambda *a: (["line 2 (two) is not in the mix at 0:04.3 (match 0.31)"], ""))
+    code, out = place(video, tmp_path, "--take", take)            # the listening says no, rightly or not
+    assert code == 1 and not out.exists() and "--no-listen writes the mix" in capsys.readouterr().err
+    code, out = place(video, tmp_path, "--take", take, "--no-listen")
+    assert code == 0 and len(sounds(out, tmp_path)) == 3          # the way out: the file, and the fact said twice
+    for text in (capsys.readouterr().out, (tmp_path / pv.REPORT_NAME).read_text(encoding="utf-8")):
+        assert "placed: placement not checked (--no-listen)" in text and "picture identical" in text
+    out.unlink()
+    monkeypatch.setattr(pv, "fit", lambda piece, window, max_tempo, tighten=False: pv.Fit((), piece.length, 1.0, 1.0))
+    code, out = place(video, tmp_path, "--take", take, "--no-listen")
+    assert code == 1 and not out.exists()                         # the other checks still run: line 2 is too long
+    assert "line 2 (two) came out 0.3" in capsys.readouterr().err
+
+
+@needs_ffmpeg
 def test_place_voice_never_shows_an_absolute_path(video, tmp_path, capsys):
     """The recording and --out may live anywhere and the report gets pasted: messages and report
     name files, or paths inside the repository, never the folders above them."""
@@ -327,10 +346,17 @@ def test_place_voice_never_shows_an_absolute_path(video, tmp_path, capsys):
                        (["--take", tmp_path / "nope.m4a"], 1), (["--take", broken], 1),
                        (["--lines", tmp_path / "nowhere"], 1), (["--lines", tmp_path], 2)):
         assert place(video, tmp_path, *args)[0] == code
+    deep = tmp_path / ("a" * 120) / ("b" * 120)                   # ffprobe's complaint is longer than what is shown of it
+    deep.mkdir(parents=True)
+    (deep / "broken_video.mp4").write_text("not a video")
+    assert pv.main(["--take", str(take), "--video", str(deep / "broken_video.mp4"), "--out", str(tmp_path / "v.mp4")],
+                   shot_rows=SHOTS) == 1
     shown = capsys.readouterr()
     text = shown.out + shown.err + (tmp_path / pv.REPORT_NAME).read_text(encoding="utf-8")
     assert "voice.mp4: take take.m4a on video.mp4" in text and "no such recording: nope.m4a" in text
     assert "ffmpeg failed" in text and "-i broken.m4a" in text and "no such folder: nowhere" in text
+    assert "cannot read broken_video.mp4: " in text and "broken_video.mp4: Invalid data" in text   # ffprobe's words
+    assert "aaaa" not in text and "bbbb" not in text              # ... without the folders, even cut short
     assert str(tmp_path.parent) not in text and not re.search(r"(?<![\w.~-])/[\w.-]+/", text)
     assert pv.rel(ROOT / "docs" / "video" / "out" / "x.mp4") == "docs/video/out/x.mp4"   # inside the repository: from its root
 
