@@ -24,6 +24,10 @@ calls (yellow, bottom left) and English subtitles for the Spanish lines (bottom 
 stage is served by request interception at /__stage on the demo's own origin; the app has no
 video-only route.
 
+Shot 3's card is not text but a diagram of the mechanism that builds itself on a fixed timeline
+(ANSWER_BEATS: CSS animations with fixed delays, counted from the start of the shot), alone on the
+dark stage.
+
 Shot 10 is the one thing in the video that is not this offline demo: a still, the committed
 screenshot docs/screenshots/12-sandbox-ledger.png (the ledger after scripts/sandbox_ui_run.py ran
 against the real PayPal sandbox), with the ids of docs/SANDBOX_UI_RUN.md drawn over it. It needs no
@@ -59,7 +63,7 @@ REPO_URL = "github.com/cleveria-ai/ask-first-pay"
 SHOTS = [
     (1, "cold-open", 10, "Phone only: the pending no-show card 'Keep up to $10.00 of the held deposit'; lower third 9:12 a.m."),
     (2, "founder", 10, "Still of the same phone, blurred; founder lower third (voice only); 'Can it touch my money?'"),
-    (3, "answer", 14, "Card: what the agent does on its own (hold) and what it can only ask for (keep, release, give back)"),
+    (3, "answer", 14, "Animated diagram: the agent holds $10.00 on PayPal on its own; to move it, it asks: owner's tap, single-use pass, one action unlocked"),
     (4, "booking", 20, "11:48 p.m.: Lucía books; Hold the deposit; simulated checkout; webhook note; held, not charged"),
     (5, "no-show", 24, "9:12 a.m.: the agent asked; phone card with the approval id; Approve; ledger detail with PayPal-Request-Id"),
     (6, "goodwill", 18, "10:05 a.m.: Lucía asks for the deposit back; request_refund; phone 'Give back up to $10.00'; Approve"),
@@ -97,13 +101,10 @@ STAGE = """<!doctype html><meta charset=utf-8><title>Ask First Pay</title>
  #owner{width:100%;height:100%;border:0;border-radius:20px;background:#fff}
  body.phone-only #chat{display:none}
  body.blur #wrap{filter:blur(7px) brightness(.55)}
+ body.card-only #wrap{visibility:hidden}
  #card{position:fixed;inset:0 0 92px 0;display:none;align-items:center;justify-content:center;
        flex-direction:column;background:rgba(15,23,32,.97);text-align:center;padding:0 80px}
  #card h1{font-size:56px;margin:0 0 18px} #card p{font-size:26px;max-width:900px;line-height:1.4;margin:8px 0}
- #card .cols{display:flex;gap:48px;text-align:left;margin:10px 0 26px}
- #card h2{font-size:24px;margin:0 0 10px;color:#9fb3c8;text-transform:uppercase;letter-spacing:.06em}
- #card li{font-size:28px;line-height:1.5;list-style:none} #card ul{padding:0;margin:0}
- #card code{font-size:18px;color:#ffd84d;margin-left:10px}
  #card .small{font-size:18px;color:#9fb3c8}
  #card .still{position:absolute;left:24px;right:24px;top:96px;bottom:6px;border-radius:10px;
        overflow:hidden;background:#fff}
@@ -174,8 +175,11 @@ class Shot:
         self.start_mode = mode                    # stage classes from the first frame, e.g. "phone-only"
 
     def __enter__(self):
-        self.t_open = time.monotonic()            # the clip starts here (page load at its head)
         self.page = self.ctx.new_page()
+        # The clip's clock starts with the page's first frame, just after the page exists (page
+        # load at its head). Marking it before new_page() put every shot's start 0.1-0.3 s late
+        # in its clip, which showed once a shot had a timeline of its own (shot 3's animation).
+        self.t_open = time.monotonic()
         self.page.goto(self.base + "/__stage" + (f"#{self.start_mode}" if self.start_mode else ""))
         self.chat = self.page.frame_locator("#chat")
         self.owner = self.page.frame_locator("#owner")
@@ -314,13 +318,159 @@ def book_and_hold(ctx, base: str, message: str, simulated: bool) -> None:
     offstage(ctx, base, steps)
 
 
+# Shot 3 is a diagram that builds itself while the voice explains it. Each row is one thing the
+# viewer sees change: (starts at s, lasts s, "class:keyframes ..."), counted from the moment the
+# card is drawn, which is the start of the shot. Fixed delays only: nothing waits for the network,
+# a timer in the page or chance, so every recording plays the same. The rows follow the burned-in
+# narration (docs/video/subtitles.srt): each thing appears while its sentence is on screen. At
+# most three rows overlap, and the last one ends ANSWER_STILL_S before the shot does
+# (tests/test_video_assets.py checks all of this).
+ANSWER_BEATS = [
+    # 0.3-1.9 s "Deposits stop no-shows.": who is involved
+    (0.00, 0.45, "customer:rise"),
+    (0.45, 0.30, "to-agent:show"),
+    (0.60, 0.45, "agent:rise"),
+    (1.05, 0.30, "to-paypal:show"),
+    (1.20, 0.45, "paypal:rise"),
+    # 1.9-7.1 s "But every day someone decides whose deposit to keep, release or give back.":
+    # the three ways the money can move, switched off, each as it is said; then locked
+    (2.20, 0.40, "decides:show"),
+    (4.60, 0.35, "act-keep:show"),
+    (5.30, 0.35, "act-release:show"),
+    (6.00, 0.35, "act-back:show"),
+    (6.60, 0.35, "lock:pop gate:show"),
+    # 7.1-11.7 s "Our agent can hold money on its own, because a hold moves nothing."
+    (7.30, 0.40, "own:show"),
+    (7.50, 1.80, "hold:send-hold"),
+    (9.30, 0.20, "slot:catch"),
+    (9.50, 0.30, "moved:pop"),
+    (9.70, 0.40, "say-hold:show"),
+    # the same sentence is still on screen: the way round the lock is laid out
+    (10.60, 0.35, "ask:show"),
+    (11.00, 0.40, "phone:rise whose:show"),
+    # 11.7-13.7 s "To move it, it can only ask.": the tap, the single-use pass, one action unlocked
+    (11.90, 0.40, "tap:tap"),
+    (12.00, 0.60, "pass:send-pass"),
+    (12.70, 0.20, "shackle:open lock-ink:unlocked"),
+    (12.70, 0.20, "keep-on:show branch-on:show"),
+    (12.70, 0.20, "used:stamp pass-ink:spent"),
+    (12.90, 0.05, "say-move:show"),              # short: the recorder's clock is good to +/-0.05 s
+]
+ANSWER_STILL_S = 1                               # the finished diagram stays this long, unmoving
+
+# The diagram is laid out by hand on the card's 1280x628 (the stage minus the narration band), in
+# the stage's and the app's own colours and fonts; no text under 24 px. Pieces marked `h` start
+# hidden; each keyframe set only says where a piece ends, and `forwards` keeps it there.
+ANSWER_CSS = """
+ .flow{position:absolute;inset:0;background:#0f1720;text-align:left;font-size:24px;line-height:32px}
+ .flow *{box-sizing:border-box} .flow>*{position:absolute} .flow .h{opacity:0}
+ .flow svg{overflow:visible}
+ .flow .ln{fill:none;stroke:#9fb3c8;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+ .flow .ln.ask{stroke:#7cb8ff} .flow .ln.branch-on{stroke:#7fdca5;stroke-width:4}
+ .flow .node,.flow .paypal{border:2px solid #354152;border-radius:12px;background:#171e28}
+ .flow .node{height:76px;display:flex;align-items:center;justify-content:center;font-size:26px;
+             font-weight:600}
+ .flow .agent{border-color:#7cb8ff}
+ .flow .paypal b{position:absolute;left:18px;top:8px;font-size:28px}
+ .flow .slot{position:absolute;left:54px;top:48px;width:196px;height:56px;border:2px dashed #9fb3c8;
+             border-radius:10px}
+ .flow .act{left:1060px;width:180px;height:52px;display:flex;align-items:center;
+            justify-content:center;border:2px solid #354152;border-radius:26px;color:#9fb3c8;
+            background:#0f1720;font-size:26px}
+ .flow .act.keep-on{color:#e8eef5;border-color:#7fdca5;background:#0f2e1e;font-weight:600}
+ .flow .decides{left:964px;top:178px}
+ .flow .hold,.flow .moved,.flow .pass,.flow .used{height:44px;display:flex;align-items:center;
+            justify-content:center;border-radius:8px;font-weight:600;white-space:nowrap}
+ .flow .hold{left:300px;top:86px;width:184px;background:#ffd84d;color:#111;
+             font-family:ui-monospace,monospace}
+ .flow .own b{color:#ffd84d}
+ .flow .moved{left:520px;top:268px;padding:0 16px;background:#0f2e1e;color:#7fdca5;
+              border:2px solid #7fdca5}
+ .flow .lock{color:#e8eef5}
+ .flow div.ask{left:386px;top:166px;color:#7cb8ff;font-weight:600}
+ .flow .phone{left:260px;top:226px;width:220px;height:236px;padding:10px;border-radius:26px;
+              background:#222}
+ .flow .screen{position:relative;height:100%;border-radius:17px;background:#fff;color:#111827;
+               text-align:center;font-weight:600;padding-top:16px}
+ .flow .screen:after{content:"";position:absolute;left:68px;bottom:12px;width:64px;height:5px;
+                     border-radius:3px;background:#cfd5de}
+ .flow .screen b{display:block;font-size:30px;line-height:38px}
+ .flow .btn{position:absolute;left:14px;right:14px;top:104px;height:48px;border-radius:8px;
+            background:#0b57a4;color:#fff;display:flex;align-items:center;justify-content:center}
+ .flow .whose{left:40px;top:258px;width:206px;text-align:right;font-weight:600}
+ .flow .tap{left:344px;top:338px;width:52px;height:52px;border-radius:50%;
+            border:4px solid #ffd84d;background:rgba(255,216,77,.45)}
+ .flow .pass{left:262px;top:342px;width:216px;background:#16304f;color:#e8eef5;
+             border:2px solid #7cb8ff}
+ .flow .pass-ink{display:flex;align-items:center;gap:8px}
+ .flow .pass svg{stroke:#7cb8ff;stroke-width:3;fill:none;stroke-linecap:round}
+ .flow .used{left:786px;top:378px;padding:0 12px;height:38px;background:#3a1617;color:#ffa3a3;
+             border:2px solid #ffa3a3;text-transform:uppercase;letter-spacing:.06em;
+             transform:rotate(-8deg)}
+ .flow .answer{left:0;top:508px;width:1280px;text-align:center;font-size:40px;line-height:52px;
+               font-weight:700}
+ @keyframes show{to{opacity:1}}
+ @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+ @keyframes pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+ @keyframes send-hold{from{opacity:1;animation-timing-function:ease-in-out}
+                      to{opacity:1;transform:translateX(706px)}}
+ @keyframes send-pass{from{opacity:1;animation-timing-function:ease-in-out}
+                      to{opacity:1;transform:translateX(450px)}}
+ @keyframes catch{to{border-color:#ffd84d;border-style:solid}}
+ @keyframes tap{0%{opacity:0;transform:scale(.5)}30%{opacity:1;transform:none}
+                100%{opacity:0;transform:scale(2)}}
+ @keyframes open{to{transform:translateY(-9px)}}
+ @keyframes unlocked{to{color:#7fdca5}}
+ @keyframes stamp{from{opacity:0;transform:rotate(-8deg) scale(1.7)}
+                  to{opacity:1;transform:rotate(-8deg)}}
+ @keyframes spent{to{opacity:.7;text-decoration:line-through}}
+"""
+ANSWER_HTML = """<div class=flow>
+ <svg viewBox="0 0 1280 628" width=1280 height=628>
+  <g class="ln h to-agent"><path d="M208 108H240"/><path d="M230 100l10 8-10 8"/></g>
+  <g class="ln h to-paypal"><path d="M498 108H932"/><path d="M922 100l10 8-10 8"/></g>
+  <g class="ln h ask"><path d="M370 154V214"/><path d="M362 204l8 10 8-10"/></g>
+ </svg>
+ <div class="node h customer" style="left:24px;top:70px;width:176px">Customer</div>
+ <div class="h paypal" style="left:944px;top:30px;width:312px;height:440px"><b>PayPal</b>
+  <div class=slot></div></div>
+ <div class="h decides">every day,<br>someone decides:</div>
+ <div class="act h act-keep" style="top:270px">keep</div>
+ <div class="act h keep-on" style="top:270px">keep</div>
+ <div class="act h act-release" style="top:338px">release</div>
+ <div class="act h act-back" style="top:406px">give back</div>
+ <svg viewBox="0 0 1280 628" width=1280 height=628 style="left:0;top:0">
+  <path class="ln h gate" d="M1012 364H1060M1036 296V432M1036 296H1060M1036 432H1060"/>
+  <path class="ln h branch-on" d="M1012 364H1036V296H1060"/>
+ </svg>
+ <div class="h hold">HOLD $10.00</div>
+ <div class="node h agent" style="left:250px;top:70px;width:240px">AI front desk</div>
+ <div class="h own" style="left:520px;top:160px"><b>on its own:</b><br>books · creates the order<br>
+  · holds the deposit</div>
+ <div class="h moved">$0.00 moved</div>
+ <svg class="h lock" viewBox="0 0 44 52" width=52 height=62 style="left:954px;top:322px">
+  <g class=lock-ink><path class=shackle d="M12 36V15a10 10 0 0 1 20 0v8" fill=none
+   stroke=currentColor stroke-width=5 stroke-linecap=round />
+  <rect x=4 y=22 width=36 height=27 rx=5 fill=currentColor /></g>
+  <circle cx=22 cy=35 r=4 fill=#0f1720 /></svg>
+ <div class="h ask">ask</div>
+ <div class="h pass"><span class=pass-ink><svg viewBox="0 0 40 24" width=40 height=24>
+  <path d="M2 17c5-14 9-14 9-3s5 9 8-1 6-7 7 1 6 3 11-3"/></svg>single-use</span></div>
+ <div class="h phone"><div class=screen>Keep up to<b>$10.00</b><div class=btn>Approve</div></div></div>
+ <div class="h whose">Owner's phone</div>
+ <div class="h tap"></div>
+ <div class="h used">used</div>
+ <div class=answer><span class="h say-hold">It can hold it.</span>
+  <span class="h say-move">Only you can move it.</span></div>
+</div>"""
+
+
 def answer_card() -> str:
-    return ("<div class=cols><div><h2>The agent, on its own</h2><ul>"
-            "<li>books</li><li>creates the PayPal order</li><li>holds the deposit</li></ul></div>"
-            "<div><h2>The agent can only ask</h2><ul>"
-            "<li>keep<code>capture</code></li><li>release<code>void</code></li>"
-            "<li>give back<code>refund</code></li></ul></div></div>"
-            "<p>Can it touch my money?</p><p><b>It can hold it. Only you can move it.</b></p>")
+    """Shot 3: the mechanism, drawn piece by piece on the timeline of ANSWER_BEATS."""
+    timing = "".join(f" .flow .{cls}{{animation:{kf} {lasts}s ease {at}s forwards}}"
+                     for at, lasts, what in ANSWER_BEATS
+                     for cls, kf in (piece.split(":") for piece in what.split()))
+    return f"<style>{ANSWER_CSS}{timing}</style>{ANSWER_HTML}"
 
 
 def closing_card() -> str:
@@ -389,7 +539,9 @@ def record(base: str, code: str, simulated: bool, only: set[int] | None) -> None
             print(f"shot {n} {slug} ({seconds} s)")
             if n in (1, 5):
                 ask_no_show()
-            modes = {1: "phone-only", 2: "phone-only,blur"}
+            # Shot 3 is the card alone on the dark stage from the clip's first frame, so a cut a
+            # frame early or late never shows the demo behind it.
+            modes = {1: "phone-only", 2: "phone-only,blur", 3: "card-only"}
             with Shot(ctx, base, n, slug, seconds, modes.get(n, "")) as s:
                 if n == 1:                               # cold open: the decision, nothing else
                     s.owner_card()
