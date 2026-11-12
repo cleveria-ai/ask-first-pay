@@ -22,7 +22,7 @@ hackathon-specific questions and answer them from `docs/DEVPOST.md`.
 
 | Field | Value |
 |---|---|
-| Devpost draft | https://devpost.com/software/ask-first-pay (created 2026-11-12, not submitted). Filled: project name, tagline, story, built-with tags, repository link, eight gallery images with captions, video link, and the project answers of "Additional info" (new project with the prior-work disclosure, PayPal and AI tools, AG Grid, repository, testing instructions, AI tools used). OWNER fills submitter type, country, organization, the PayPal experience answers and the eligibility boxes, then accepts the terms and presses Submit. |
+| Devpost submission | https://devpost.com/software/ask-first-pay, submitted on 2026-11-12 to the PayPal AI Hackathon (Devpost: "Project submitted! Continue to edit your project until the hackathon deadline"). It holds: project name, tagline, story, built-with tags, repository link, eight gallery images with captions, video link, and "Additional info" (individual entrant, new project with the prior-work disclosure, PayPal and AI tools, AG Grid, repository, testing instructions, AI tools used). The personal answers, the eligibility boxes and the acceptance of the terms were given by the OWNER. |
 | Project name | Ask First Pay |
 | Elevator pitch / tagline | "Can it touch my money?" An AI front desk for clinics that can hold a PayPal deposit on its own. Only the owner's tap moves it. |
 | About the project (story) | Paste `docs/DEVPOST.md` from "Inspiration" to "Prior work" (eleven sections, including "How it differs", "Proven on the real PayPal sandbox" and "Built with AG Grid"). Founder claims are default wording (`docs/FOUNDER_FACTS.md`); change them there first if the founder rewrites any. |
