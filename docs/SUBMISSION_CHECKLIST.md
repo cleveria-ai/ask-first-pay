@@ -28,7 +28,7 @@ hackathon-specific questions and answer them from `docs/DEVPOST.md`.
 | About the project (story) | Paste `docs/DEVPOST.md` from "Inspiration" to "Prior work" (eleven sections, including "How it differs", "Proven on the real PayPal sandbox" and "Built with AG Grid"). Founder claims are default wording (`docs/FOUNDER_FACTS.md`); change them there first if the founder rewrites any. |
 | AG Grid sponsor prize | Mention it: the ledger and the owner's mandate list are AG Grid Community grids; paste *Built with AG Grid* from `docs/DEVPOST.md` (features named there). |
 | Built with | python, fastapi, jinja, httpx, paypal-orders-v2, paypal-payments-v2, anthropic-claude, ed25519, webcrypto, ag-grid |
-| "Try it out" links | Repository URL (once public): https://github.com/cleveria-ai/ask-first-pay — OWNER confirms |
+| "Try it out" links | Repository URL (public since 2026-11-10): https://github.com/cleveria-ai/ask-first-pay |
 | Video demo link | https://youtu.be/1rgegQG87w8 (public on YouTube since 2026-11-12; `ask_first_pay.mp4`, 2:47, narration burned in, no voice) |
 | Image gallery / thumbnail | In this order: `docs/screenshots/02-owner-approval.png`, `12-sandbox-ledger.png` (real PayPal sandbox ids), `12-sandbox-chat-held.png` (the chip reads "PayPal sandbox"), `01-chat-booking.png`, `03-ledger-replay.png`, `04-cancellation-voided.png`, `05-owner-mobile.png`, `10-owner-today-mobile.png` (all PNG; desktop 1280x720, phone 375x812; the rest optional). Captions: the table in `docs/DEVPOST.md` → *Screenshots*. Thumbnail (3:2): crop `02-owner-approval.png` (OWNER). Regenerate: `.venv/bin/python scripts/screenshots.py --dark`. |
 | PayPal APIs / products used | Orders v2 (create with intent AUTHORIZE, authorize), Payments v2 (capture, reauthorize, void, refund, get), OAuth 2.0 client credentials; sandbox. Run for real on 2026-11-11: `docs/SANDBOX_RUN.md`, `docs/SANDBOX_UI_RUN.md` |
@@ -36,11 +36,11 @@ hackathon-specific questions and answer them from `docs/DEVPOST.md`.
 | Prior work / existing code disclosure | Paste *Prior work* from `docs/DEVPOST.md`: `libs/ask-first-mandate` created 2026-10-17 (inside the submission period) for our "Ask First for Alexa+" entry, reused under Apache-2.0; its identity signing and ledger were ported from our earlier public repository `soyharso/agent-identity-firma` (August 2026). Everything under `src/ask_first_pay/` is new. AG Grid Community vendored (MIT). |
 | Testing instructions for judges | "Run it in 2 minutes" in `README.md`: `scripts/demo.sh`, no keys. |
 | License | Apache-2.0 |
-| Team members | OWNER (invite on Devpost) |
-| Country of residence, eligibility, tax / payment details | OWNER |
-| Submitter type (individual, team, organization) | OWNER |
-| Any hackathon-specific questions not listed here | OWNER (answer from `docs/DEVPOST.md`) |
-| Accept the submission terms and press Submit | OWNER |
+| Team members | None added (single entrant). OWNER can invite on Devpost before the deadline |
+| Country of residence, eligibility | Answered on 2026-11-12 with the OWNER's answers. Tax / payment details: OWNER, only if a prize is awarded |
+| Submitter type (individual, team, organization) | Individual (the OWNER's choice, 2026-11-12) |
+| Any hackathon-specific questions not listed here | Answered on 2026-11-12 from `docs/DEVPOST.md` and the OWNER's answers |
+| Accept the submission terms and press Submit | Done on 2026-11-12 on the OWNER's instruction; the entry can be edited until the deadline |
 
 
 ## Before making the repository public
