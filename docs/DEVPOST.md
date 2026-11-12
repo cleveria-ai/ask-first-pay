@@ -2,6 +2,8 @@
 
 **Tagline:** "Can it touch my money?" An AI front desk for clinics that can hold a PayPal deposit on its own. Only the owner's tap moves it.
 
+**Video (2:47):** https://youtu.be/1rgegQG87w8 · **Devpost:** https://devpost.com/software/ask-first-pay
+
 ## Inspiration
 
 I run qnowa: booking with deposits for clinics and salons in Latin America. Deposits are how a
