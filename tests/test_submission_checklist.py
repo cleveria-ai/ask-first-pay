@@ -1,29 +1,30 @@
-"""docs/SUBMISSION_CHECKLIST.md names the Devpost draft the form fields were pasted into.
+"""docs/SUBMISSION_CHECKLIST.md names the Devpost submission the form fields were pasted into.
 
-Whoever presses Submit must land on the one draft that already holds the text, not start a
-second project. The row carries the project's own Devpost address and still says who submits."""
+Whoever edits the entry before the deadline must land on the one project that already holds
+the text, not start a second one. The row carries the project's own Devpost address, the same
+one docs/DEVPOST.md gives, the day it was submitted, and who answered the personal questions."""
 import re
 from pathlib import Path
 
 CHECKLIST = Path(__file__).resolve().parents[1] / "docs" / "SUBMISSION_CHECKLIST.md"
-DRAFT_URL = re.compile(r"https://devpost\.com/software/[a-z0-9][a-z0-9-]*")
+PROJECT_URL = re.compile(r"https://devpost\.com/software/[a-z0-9][a-z0-9-]*")
 
 
-def draft_rows() -> list[str]:
+def submission_rows() -> list[str]:
     text = CHECKLIST.read_text(encoding="utf-8")
-    return [line for line in text.splitlines() if line.startswith("| Devpost draft")]
+    return [line for line in text.splitlines() if line.startswith("| Devpost submission")]
 
 
-def test_checklist_names_the_devpost_draft():
-    rows = draft_rows()
-    assert len(rows) == 1, "one row 'Devpost draft' in the form-fields table"
-    found = DRAFT_URL.search(rows[0])
-    assert found, "the row carries the draft's devpost.com/software/ address"
+def test_checklist_names_the_devpost_submission():
+    rows = submission_rows()
+    assert len(rows) == 1, "one row 'Devpost submission' in the form-fields table"
+    found = PROJECT_URL.search(rows[0])
+    assert found, "the row carries the project's devpost.com/software/ address"
     devpost = (CHECKLIST.parent / "DEVPOST.md").read_text(encoding="utf-8")
     assert found.group(0) in devpost, "the same address is the one docs/DEVPOST.md gives"
 
 
-def test_checklist_draft_row_leaves_submit_to_the_owner():
-    rows = draft_rows()
-    assert rows and "OWNER" in rows[0], "the draft row says the owner submits"
-    assert "not submitted" in rows[0]
+def test_checklist_submission_row_says_when_and_who():
+    rows = submission_rows()
+    assert rows and re.search(r"submitted on 20\d\d-\d\d-\d\d", rows[0]), "the row dates the submission"
+    assert "OWNER" in rows[0], "the row says the owner gave the personal answers and accepted the terms"
