@@ -17,7 +17,10 @@ def draft_rows() -> list[str]:
 def test_checklist_names_the_devpost_draft():
     rows = draft_rows()
     assert len(rows) == 1, "one row 'Devpost draft' in the form-fields table"
-    assert DRAFT_URL.search(rows[0]), "the row carries the draft's devpost.com/software/ address"
+    found = DRAFT_URL.search(rows[0])
+    assert found, "the row carries the draft's devpost.com/software/ address"
+    devpost = (CHECKLIST.parent / "DEVPOST.md").read_text(encoding="utf-8")
+    assert found.group(0) in devpost, "the same address is the one docs/DEVPOST.md gives"
 
 
 def test_checklist_draft_row_leaves_submit_to_the_owner():
